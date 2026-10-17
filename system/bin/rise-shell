@@ -305,6 +305,18 @@ class Rise(Gtk.Application):
         key = 'app:' + aid
         if key in self.windows:
             w = self.windows[key]
+            # dopo un aggiornamento la finestra già aperta ha ancora la pagina vecchia: si ricarica
+            try:
+                mt = os.path.getmtime('/opt/rise/index.html')
+                if mt > getattr(w, '_rise_mt', mt) and key in self.views:
+                    self.views[key].reload()
+                w._rise_mt = mt
+            except (OSError, AttributeError):
+                pass
+            try:
+                w.unminimize()
+            except Exception:
+                pass
             w.present()
             if a.get('goto') is not None:
                 self.js(key, 'window.__riseGoto && window.__riseGoto(%s)' % json.dumps(a.get('goto')))
@@ -327,6 +339,10 @@ class Rise(Gtk.Application):
                     threading.Thread(target=risesys.CMDS.get(c, lambda _: None), args=({},), daemon=True).start()
             return False
         w.connect('close-request', gone)
+        try:
+            w._rise_mt = os.path.getmtime('/opt/rise/index.html')
+        except (OSError, AttributeError):
+            pass
         w.present()
         return {'ok': True}
 
