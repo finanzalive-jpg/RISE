@@ -544,6 +544,16 @@ html[data-role=app] .tb{cursor:default}
   </div>
 </div>
 
+<div id="rise-loading" style="position:fixed;inset:0;display:grid;place-items:center;font:15px sans-serif;color:#5a7085;pointer-events:none;z-index:1">Carico…</div>
+<script>
+/* Se qualcosa si rompe, la finestra lo dice (invece di restare vuota): serve a capire i problemi dalle foto */
+(function(){function show(m){try{var d=document.getElementById('rise-err');if(!d){d=document.createElement('div');d.id='rise-err';
+  d.style.cssText='position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;background:#fff3f2;color:#8a1c14;border:1px solid #e6a19b;border-radius:8px;padding:8px 12px;font:13px/1.4 monospace;white-space:pre-wrap;max-height:40vh;overflow:auto';
+  d.onclick=function(){d.remove()};(document.body||document.documentElement).appendChild(d)}d.textContent=(d.textContent?d.textContent+'\n':'Errore (fai una foto e mandala; clic per chiudere):\n')+m}catch(e){}}
+ window.__riseShowErr=show;
+ window.addEventListener('error',function(e){if(e&&e.message)show(e.message+' — riga '+(e.lineno||'?')+':'+(e.colno||'?'))});
+ window.addEventListener('unhandledrejection',function(e){var r=e&&e.reason;if(r&&/^(browser|timeout)$/.test(r.message||''))return;show('(async) '+((r&&(r.stack||r.message))||r))});})();
+</script>
 <script>
 (function(){
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -1391,6 +1401,7 @@ function renderInstaller(b){
         else body.innerHTML=`<div class="ihero">${I('install',56)}<div><h2>Fatto! 🎉</h2><p class="lead">${esc(st.message)}</p></div></div><div class="iact"><button class="btn primary" data-off>Spegni il computer</button></div>`,$('[data-off]',body)&&($('[data-off]',body).onclick=()=>SYS.call('power',{action:'poweroff'}))}},1000)};
   (async()=>{const slow=setTimeout(()=>{const n=$('.note',body);if(n&&!SC)n.textContent='Sto ancora leggendo i dischi… (con dischi grandi o lenti può volerci fino a un minuto)'},10000);
     try{SC=await SYS.call('install.scan')}catch(e){SC={ok:false,message:e.message==='timeout'?'I dischi non rispondono.':e.message}}clearTimeout(slow);
+    if(SC&&SC.ok){SC.disks=SC.disks||[];SC.models=SC.models||[];SC.minGb=SC.minGb||20}
     if(!SC.ok){body.innerHTML=`<p class="err">${esc(SC.message||'Non riesco a leggere i dischi.')}</p><div class="iact"><button class="btn" data-retry>Riprova</button></div>`;$('[data-retry]',body).onclick=()=>renderInstaller(b);return}
     const st=(await SYS.call('install.status').catch(()=>({}))).status||{};if(st.phase&&!st.done)return progress();step1()})();
 }
@@ -2426,6 +2437,7 @@ else if(ROLE==='app'&&APPS[APP_ID]){openApp(APP_ID,GOTO!=null?{goto:GOTO}:{});W[
 if(NATIVE&&ROLE==='app'&&APPS[APP_ID]&&APPS[APP_ID].fit)setTimeout(()=>{const b=$('.wbody',W[APP_ID].el);if(!b)return;
   const extraH=innerHeight-b.clientHeight,extraW=innerWidth-b.clientWidth,needH=b.scrollHeight+extraH,needW=b.scrollWidth+extraW;
   if(needH>innerHeight+2||needW>innerWidth+2)SYS.call('win.fit',{needW,needH,curW:innerWidth,curH:innerHeight}).catch(()=>{})},350);
+{const L=document.getElementById('rise-loading');if(L)L.remove()}
 if(NATIVE&&APP_ID==='files')SYS.call('sys.live').then(r=>{LIVE_SYS=!!(r&&r.live)}).catch(()=>{});
 if(NATIVE)SYS.call('bright.get').then(r=>{LIVE.backlight=r.available;if(r.available&&(!MW||ROLE==='panel'||APP_ID==='settings'))S.bright=r.percent;apply();refreshSettings('schermo',true)}).catch(()=>{});
 if(MW&&(ROLE==='popup'||ROLE==='panel'))SYS.call('native.list').then(l=>{NAPPS=l||[]}).catch(()=>{});
