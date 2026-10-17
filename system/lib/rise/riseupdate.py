@@ -54,10 +54,22 @@ def apply(_=None):
     if status()['status'].get('running'):
         return {'ok': True}
     try:
-        subprocess.Popen(['sudo', '-n', TOOL, 'apply'], start_new_session=True,
-                         stdout=subprocess.DEVNULL, stderr=open('/tmp/rise-aggiornamento.log', 'a'))
+        p = subprocess.Popen(['sudo', '-n', TOOL, 'apply'], start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=open('/tmp/rise-aggiornamento.log', 'a'))
     except OSError as e:
         return {'ok': False, 'message': 'Non riesco ad avviare l’aggiornamento: %s' % e}
+    # se sudo rifiuta (permessi) si chiude subito: meglio dirlo che restare fermi senza spiegazioni
+    for _ in range(15):
+        time.sleep(0.1)
+        if p.poll() is not None:
+            if p.returncode != 0 and not os.path.exists(STATUS + '.tmp'):
+                try:
+                    tail = open('/tmp/rise-aggiornamento.log', errors='replace').read().strip().splitlines()[-1]
+                except (OSError, IndexError):
+                    tail = ''
+                if 'password' in tail or 'sudo' in tail:
+                    return {'ok': False, 'message': 'L’aggiornamento non ha i permessi per partire (%s).' % tail}
+            break
     with _lock:
         _last['r'] = None
     return {'ok': True}
