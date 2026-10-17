@@ -709,7 +709,7 @@ async function updBox(main,force){const box=$('#upd-box',main);if(!box)return;
   const cur=r.current||{},done=st&&st.done&&st.restart&&st.version&&(!r.latest||st.version===r.latest.version)&&Date.now()/1000-(st.time||0)<86400;
   let h=`<p>Versione installata: <b>${fmt(cur.version)}</b></p>`;
   if(st&&st.phase==='error'&&Date.now()/1000-(st.time||0)<3600)h+=`<p class="err">${esc(st.message)}</p>`;
-  if(done)h+=`<p class="ok"><b>${esc(st.message)}</b></p><button class="btn primary" data-reboot>Riavvia adesso</button>`;
+  if(done)h+=`<p class="ok"><b>${esc(st.message)}</b></p><button class="btn primary" data-uirestart>Applica subito</button> ${r.live?'<p class="note">Dalla chiavetta <b>non riavviare il computer</b>: l’aggiornamento si perderebbe. “Applica subito” riavvia solo lo schermo di Rise (qualche secondo, le finestre aperte si chiudono).</p>':'<button class="btn" data-reboot>Riavvia il computer</button>'}`;
   else if(!r.ok)h+=`<p class="note">${esc(r.message||'Non riesco a controllare: serve internet.')}</p><button class="btn" data-recheck>Controlla di nuovo</button>`;
   else if(r.available){const L=r.latest;h+=`<p><b>È disponibile la versione ${fmt(L.version)}</b> (${Math.max(1,Math.round((L.size||0)/1048576))} MB)</p>
     ${(L.notes||[]).length?`<details><summary>Cosa cambia</summary><ul>${L.notes.slice(0,10).map(n=>`<li>${esc(n)}</li>`).join('')}</ul></details>`:''}
@@ -721,6 +721,7 @@ async function updBox(main,force){const box=$('#upd-box',main);if(!box)return;
   box.innerHTML=h;
   const b=$('[data-upd]',box);if(b)b.onclick=async()=>{b.disabled=true;const x=await SYS.call('update.apply').catch(e=>({ok:false,message:e.message}));if(!x.ok){box.insertAdjacentHTML('beforeend',`<p class="err">${esc(x.message)}</p>`);return}setTimeout(()=>updBox(main,false),800)};
   const c=$('[data-recheck]',box);if(c)c.onclick=()=>{box.innerHTML='<p class="note">Controllo…</p>';updBox(main,true)};
+  const ur=$('[data-uirestart]',box);if(ur)ur.onclick=()=>{ur.disabled=true;ur.textContent='Riavvio lo schermo…';SYS.call('ui.restart').catch(()=>{})};
   const rb=$('[data-reboot]',box);if(rb)rb.onclick=()=>SYS.call('power',{action:'reboot'}).catch(()=>{});
   const ro=$('[data-rollback]',box);if(ro)ro.onclick=async()=>{if(ro.dataset.sure!=='1'){ro.dataset.sure='1';ro.textContent='Sicuro? Torna indietro';return}ro.disabled=true;const x=await SYS.call('update.rollback').catch(()=>({ok:false}));box.insertAdjacentHTML('beforeend',`<p class="${x.ok?'ok':'err'}">${x.ok?'Fatto: riavvia il computer.':'Non ci sono riuscito'+(x.message?': '+esc(x.message):'.')}</p>`)}}
 function apply(){

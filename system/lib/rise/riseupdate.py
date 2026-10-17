@@ -68,4 +68,16 @@ def rollback(_=None):
     return {'ok': r.returncode == 0, 'message': (r.stderr or '').strip()[-200:]}
 
 
-CMDS = {'update.check': check, 'update.status': status, 'update.apply': apply, 'update.rollback': rollback}
+def restart_ui(_=None):
+    """Riavvia solo l'interfaccia (barra, desktop, finestre di Rise): l'aggiornamento entra in funzione
+    senza riavviare il computer (dalla chiavetta, riavviare lo cancellerebbe)."""
+    try:
+        subprocess.Popen(['sh', '-c', 'sleep 1; pkill -f 'python3 [^ ]*rise-shell$'; pkill -f risewake.py; sleep 1.5; '
+                          'exec rise-shell >/tmp/rise-shell.log 2>&1'],
+                         start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError as e:
+        return {'ok': False, 'message': str(e)}
+    return {'ok': True}
+
+
+CMDS = {'ui.restart': restart_ui, 'update.check': check, 'update.status': status, 'update.apply': apply, 'update.rollback': rollback}
