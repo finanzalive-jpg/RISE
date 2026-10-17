@@ -330,7 +330,7 @@ def install(o):
     status(phase='boot', pct=86, message='Preparo l’avvio…')
     _chroot('update-initramfs', '-c', '-k', kver)
     grubdef = ['GRUB_DEFAULT=0', 'GRUB_TIMEOUT_STYLE=menu', 'GRUB_TIMEOUT=8', 'GRUB_DISTRIBUTOR="Rise"',
-               'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3 i915.enable_psr=0"', 'GRUB_CMDLINE_LINUX=""',
+               'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3 i915.enable_psr=0 i915.enable_fbc=0 i915.enable_dc=0"', 'GRUB_CMDLINE_LINUX=""',
                'GRUB_DISABLE_OS_PROBER=false', 'GRUB_GFXMODE=auto']
     for th in ('/cdrom/boot/grub/themes/rise', '/run/live/medium/boot/grub/themes/rise'):
         if os.path.isfile(os.path.join(th, 'bg.png')):
