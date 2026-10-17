@@ -522,5 +522,28 @@ def gpu_mode(a):
     return {'ok': True, 'mode': _gpu_mode(), 'gpu': _gpu_mode() != 'cpu', 'available': avail}
 
 
-CMDS = {'ai.prepareUsb': prepare_usb, 'ai.gpu': gpu_mode, 'ai.status': status, 'ai.download': download, 'ai.cancel': cancel, 'ai.delete': delete,
+def diag(_=None):
+    """Informazioni per capire perché l'Assistente è lento o non risponde (Impostazioni → Assistente → Diagnosi)."""
+    def rd(f, n=4000):
+        try:
+            return open(f, errors='replace').read()[-n:]
+        except OSError:
+            return ''
+    def sh(cmd):
+        try:
+            return subprocess.run(cmd, capture_output=True, text=True, timeout=8).stdout
+        except Exception as e:
+            return str(e)
+    p = _srv['proc']
+    gpu = ''
+    for d in sorted(__import__('glob').glob('/sys/class/drm/card*/device')):
+        gpu += '%s %s\n' % (rd(d + '/vendor').strip(), rd(d + '/device').strip())
+    return {'ok': True, 'cmdline': rd('/proc/cmdline').strip(), 'running': bool(p and p.poll() is None),
+            'model': _srv.get('model'), 'mode': _gpu_mode(), 'vulkan': _gpu_ok(),
+            'mem': sh(['free', '-h']), 'gpu': gpu, 'cores': _physical_cores(),
+            'log': rd('/tmp/rise-assistente.log', 3000),
+            'kernel': sh(['sh', '-c', 'journalctl -k -b --no-pager -p warning 2>/dev/null | grep -iE "i915|drm|gpu|oom|killed" | tail -15'])}
+
+
+CMDS = {'ai.diag': diag, 'ai.prepareUsb': prepare_usb, 'ai.gpu': gpu_mode, 'ai.status': status, 'ai.download': download, 'ai.cancel': cancel, 'ai.delete': delete,
         'ai.start': start, 'ai.stop': stop}
