@@ -1620,7 +1620,7 @@ function renderSettings(b,opts){
       {const db=$('[data-aidiag]',main);if(db)db.onclick=async()=>{const o=$('.ai-diag-out',main);o.hidden=false;o.textContent='Raccolgo…';
         const r=await SYS.call('ai.diag').catch(e=>({ok:false,message:e.message}));if(!r.ok){o.textContent=r.message||'errore';return}
         const lg=(r.log||'').split('\n').filter(l=>/error|fail|vulkan|ggml_|offload|model|memory|alloc|slot|eval|load|warn/i.test(l)).slice(-25).join('\n');
-        o.textContent=`Avvio: ${r.cmdline}\nLampeggio corretto (psr=0): ${/enable_psr=0/.test(r.cmdline)?'SÌ':'NO'}\nCervello: ${r.model||'-'} · acceso: ${r.running?'sì':'no'} · modo: ${r.mode} · grafica: ${r.vulkan?'sì':'no'} · core: ${r.cores}\nScheda video: ${r.gpu}\nMemoria:\n${r.mem}\nKernel:\n${r.kernel||'-'}\nRegistro:\n${lg||(r.log||'').slice(-1500)}`}}
+        o.textContent=`Avvio: ${r.cmdline}\nLampeggio corretto (psr=0): ${/enable_psr=0/.test(r.cmdline)?'SÌ':'NO'}\nCervello: ${r.model||'-'} · acceso: ${r.running?'sì':'no'} · modo: ${r.mode} · grafica: ${r.vulkan?'sì':'no'} · core: ${r.cores}\nScheda video: ${r.gpu}\nMemoria:\n${r.mem}\nAvvio (GRUB): ${r.grub||'-'}\nUltimo aggiornamento: ${r.upd||'-'}\nKernel:\n${r.kernel||'-'}\nRegistro:\n${lg||(r.log||'').slice(-1500)}`}}
       $$('[data-fig]',main).forEach(x=>x.onclick=()=>{S.figure=S.figure===false;apply();x.setAttribute('aria-checked',String(S.figure!==false))});
       $$('[data-wake]',main).forEach(x=>x.onclick=()=>{S.wake=S.wake===false;apply();x.setAttribute('aria-checked',String(S.wake!==false));wakeSync()});
       $$('[data-name]',main).forEach(x=>x.onchange=()=>{const v=x.value.replace(/[^A-Za-zÀ-ÿ' ]/g,'').trim().slice(0,20);if(!v){x.value=aiName(x.dataset.name);return}

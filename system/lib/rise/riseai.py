@@ -555,6 +555,8 @@ def diag(_=None):
             'model': _srv.get('model'), 'mode': _gpu_mode(), 'vulkan': _gpu_ok(),
             'mem': sh(['free', '-h']), 'gpu': gpu, 'cores': _physical_cores(),
             'log': rd('/tmp/rise-assistente.log', 3000),
+            'upd': rd('/var/lib/rise-update/status.json', 600) + '\n' + rd('/tmp/rise-aggiornamento.log', 600),
+            'grub': sh(['sh', '-c', 'ls /etc/default/grub.d/ 2>&1; grep -c "enable_fbc=0" /boot/grub/grub.cfg 2>&1; ls -la /boot/grub/grub.cfg 2>&1']),
             'kernel': sh(['sh', '-c', 'journalctl -k -b --no-pager -p warning 2>/dev/null | grep -iE "i915|drm|gpu|oom|killed" | tail -15'])}
 
 
