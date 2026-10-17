@@ -226,11 +226,24 @@ def _physical_cores():
     return max(1, min(8, n or (os.cpu_count() or 2)))
 
 
+def _discrete_gpu():
+    import glob
+    for d in glob.glob('/sys/class/drm/card*/device/vendor'):
+        try:
+            if open(d).read().strip() in ('0x10de', '0x1002'):      # NVIDIA, AMD
+                return True
+        except OSError:
+            pass
+    return False
+
+
 def recommended():
     """Il modello giusto per questo computer (dalla chiavetta i file stanno in memoria: si sta più bassi)."""
     ram = _mem_gb() - (1.5 if _live() else 0)
     best = '0.8b'
-    for mid in ('0.8b', '2b', '4b', '9b'):
+    # senza una scheda video vera (solo grafica integrata) il 9B è troppo lento per parlarci: al massimo il 4B
+    top = ('0.8b', '2b', '4b', '9b') if _discrete_gpu() else ('0.8b', '2b', '4b')
+    for mid in top:
         if ram >= MODELS[mid][4] and (MODELS[mid][3] < 3.9 or not risestore.too_big(_dir(), 5e9) or _splitter()):
             best = mid
     return best

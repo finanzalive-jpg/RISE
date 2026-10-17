@@ -1874,6 +1874,10 @@ function renderAssistant(b,opts){
     const hello=()=>{if(!msgs.length)log.innerHTML=`<div class="ai-hint"><b>Cosa posso fare?</b>${['Scrivimi un preventivo per l’installazione di 3 condizionatori','Che tempo farà domani a Roma?','Ho nuove email?','Ricordami alle 17 di chiamare Rossi','Come vanno i mercati?','Dimmi le notizie','Installami Spotify','Riassumimi l’ultimo PDF'].map(t=>`<button class="ai-chip">${t}</button>`).join('')}</div>`;
       $$('.ai-chip',log).forEach(c=>c.onclick=()=>{ta.value=c.textContent;go()})};
     hello();
+    // appena si apre, il cervello legge già le sue istruzioni (le parti fisse): la prima domanda arriva più in fretta
+    if(!window.__aiWarm||window.__aiWarm!==ST.model+':'+ST.port){window.__aiWarm=ST.model+':'+ST.port;
+      fetch(`http://127.0.0.1:${ST.port}/v1/chat/completions`,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({messages:[{role:'system',content:AI_SYS()},{role:'user',content:'ciao'}],tools:AI_TOOLS,max_tokens:1,cache_prompt:true,chat_template_kwargs:{enable_thinking:false}})}).catch(()=>{})}
     const add=(role,html)=>{const h=$('.ai-hint',log);if(h)h.remove();const d=document.createElement('div');d.className='ai-msg '+role;d.innerHTML=html;if(role==='bot'&&/<(table|div|details|button|ul|ol)\b|class="err"/.test(html))d.classList.add('keep');log.appendChild(d);log.scrollTop=log.scrollHeight;return d};
     ta.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();go()}};
     // ---- ragionamento: si può riaprire per vedere come ci è arrivato
@@ -2350,17 +2354,18 @@ function renderAssistant(b,opts){
         ctrl=new AbortController();
         let res;
         try{res=await fetch(`http://127.0.0.1:${ST.port}/v1/chat/completions`,{method:'POST',headers:{'Content-Type':'application/json'},signal:ctrl.signal,
-          body:JSON.stringify({messages:[{role:'system',content:AI_SYS()},...msgs.slice(-12)],tools:AI_TOOLS,stream:true,max_tokens:8000,cache_prompt:true,chat_template_kwargs:{enable_thinking:useThink}})});
+          body:JSON.stringify({messages:[{role:'system',content:AI_SYS()},...msgs.slice(-12)],tools:AI_TOOLS,stream:true,return_progress:true,max_tokens:8000,cache_prompt:true,chat_template_kwargs:{enable_thinking:useThink}})});
           if(!res.ok)throw new TypeError('http '+res.status)}
         catch(e){if(e.name!=='AbortError'&&!restarted){restarted=true;await restartEngine();out.remove();round--;continue}throw e}
         // sorveglianza: se per troppo tempo non arriva niente, si interrompe e si riprova
         let lastData=performance.now(),gotAny=false;STALL=false;clearInterval(wd);
-        wd=setInterval(()=>{if(performance.now()-lastData>(gotAny?40000:120000)){STALL=true;ctrl.abort()}},2000);
+        wd=setInterval(()=>{if(performance.now()-lastData>(gotAny?60000:300000)){STALL=true;ctrl.abort()}},2000);
         const rd=res.body.getReader(),dec=new TextDecoder();let buf='';
         try{
         while(true){const {value,done}=await rd.read();if(done)break;lastData=performance.now();gotAny=true;buf+=dec.decode(value,{stream:true});let i;
           while((i=buf.indexOf('\n'))>=0){const line=buf.slice(0,i).trim();buf=buf.slice(i+1);if(!line.startsWith('data:'))continue;const d=line.slice(5).trim();if(d==='[DONE]')continue;
             let j;try{j=JSON.parse(d)}catch(e){continue}const dl=j.choices&&j.choices[0]&&j.choices[0].delta||{};
+            if(j.prompt_progress&&!text&&!think){const pp=j.prompt_progress,tot=pp.total||0,done=(pp.processed||0)+(pp.cache||0);if(tot){const ph=$('.ai-phase',out);if(ph&&!$('.ai-think',out))ph.innerHTML=`Sto leggendo la tua richiesta… ${Math.min(99,Math.round(done*100/tot))}% <span class="ai-sec"></span>`}}
             if(dl.content){text+=dl.content;const vis=text.replace(/<think>[\s\S]*?(<\/think>|$)/g,'');if(vis.trim()){out.innerHTML=mdLite(vis);log.scrollTop=log.scrollHeight}
               if(VOICE&&!Object.keys(calls).length){const done=vis.slice(spokenUpTo);const mm=done.match(/^[\s\S]*?[.!?:](\s|\n)(?=[\s\S]{0,}$)/);const cut=done.search(/[.!?](\s)(?![\s\S]*[.!?]\s)/);if(cut>40){const piece=done.slice(0,cut+1);SYS.call('voice.say',{voice:VOICE,text:piece,append:spokenUpTo>0}).catch(()=>{});spokenUpTo+=cut+1}}}
             (dl.tool_calls||[]).forEach(tc=>{const k=tc.index||0;calls[k]=calls[k]||{id:tc.id||('c'+k),name:'',args:''};if(tc.id)calls[k].id=tc.id;if(tc.function){if(tc.function.name)calls[k].name+=tc.function.name;if(tc.function.arguments)calls[k].args+=tc.function.arguments}});
