@@ -1745,6 +1745,21 @@ Per il meteo usa SEMPRE lo strumento meteo (dati veri e immediati). Hai accesso 
 Per un preventivo usa SEMPRE crea_preventivo: passa azienda, cliente, oggetto e le voci con quantità e prezzo unitario; i totali e l'IVA li calcola Rise. Non inventare nomi, indirizzi o prezzi: se mancano il cliente o i prezzi chiedili prima, in una sola domanda.
 Per lettere e altri documenti usa crea_documento_word con un testo completo e curato, senza segnaposto tra parentesi quadre (titoli con #, elenchi con -, tabelle con |).
 Per la posta in arrivo usa leggi_email; per rispondere a un’email usa rispondi_email (se non conosci il contenuto, prima leggi_email con completa=true, poi scrivi una risposta adatta); per rinominare file o cartelle usa rinomina, per cancellarli elimina (va nel Cestino, l’utente conferma); per creare una cartella sul desktop usa crea_cartella con dove=desktop; per riassumere, tradurre o capire un documento usa leggi_documento e poi rispondi tu (se chiede di salvare la traduzione o il riassunto usa crea_documento_word); per le notizie usa notizie; per borsa, indici, azioni, cambi e criptovalute usa mercati (riporta i dati, non dare consigli di investimento); per mandare un file al telefono usa manda_al_telefono; per Wi-Fi e Bluetooth usa wifi_bluetooth. Per installare programmi usa installa_app. Per promemoria, sveglie e timer usa crea_promemoria. Per cartelle e file usa crea_cartella, apri_file, crea_pdf. Per inviare email usa prepara_email (allega_ultimo=true per il documento appena fatto): l’utente conferma sempre prima dell’invio. Per aprire programmi usa apri_programma; per aprire un sito (YouTube, Gmail…) o cercare un video usa apri_sito. Per trovare file del computer usa cerca_file.`;
+// Solo gli strumenti che servono per questa richiesta: con tutti e 24 il cervello deve rileggere
+// ~3000 parole in più a ogni domanda (sui PC senza scheda video vuol dire decine di secondi).
+const TOOL_KW={apri_programma:/\b(apri|aprimi|avvia|lancia|programm|app)\w*/,crea_documento_word:/(word|document|docx|lettera|scriv\w* (un|una|il|la) )/,
+  crea_preventivo:/(preventiv|offert|fattur|stima)/,mercati:/(borsa|mercat|indic|azion|bitcoin|\boro\b|petrolio|cambio|dollar|ftse|nasdaq|spread)/,
+  leggi_email:/(mail|posta)/,rispondi_email:/(mail|posta|rispond)/,prepara_email:/(mail|posta|scrivi a |manda a |invia a )/,
+  leggi_documento:/(legg|riassum|pdf|document|file|tradu)/,notizie:/(notizi|giornal|news)/,manda_al_telefono:/(telefon|cellulare|drop|manda|invia)/,
+  wifi_bluetooth:/(wi-?fi|bluetooth|rete)/,installa_app:/(install|negozio)/,crea_promemoria:/(ricord|promemoria|timer|sveglia|avvis|appuntament)/,
+  lista_promemoria:/(ricord|promemoria|timer|sveglia|appuntament)/,crea_cartella:/cartell/,rinomina:/(rinomin|nome)/,elimina:/(elimin|cancell|cestino)/,
+  apri_file:/(apri|aprimi|file|cartell|document|foto|pdf)/,crea_pdf:/pdf/,apri_sito:/(sito|youtube|google|amazon|gmail|www|\.com|\.it\b|cerca su|apri)/,
+  meteo:/(meteo|tempo (fa|far)|piov|temperatur|neve|vento|previsioni|caldo|freddo)/,
+  cerca_web:/(cerca|chi |cos[ae']|quando|dove|quant|perch|prezz|ultim|oggi|ieri|domani|internet|web|risultat|partita|orari)/,
+  leggi_pagina:/(sito|pagina|link|http|www)/,cerca_file:/(trova|cerca|file|dove ho)/};
+function pickTools(msgs){const users=msgs.filter(m=>m.role==='user').slice(-2).map(m=>String(m.content||'')).join(' ').toLowerCase();
+  const used=new Set();msgs.forEach(m=>(m.tool_calls||[]).forEach(c=>used.add(c.function&&c.function.name)));
+  return AI_TOOLS.filter(t=>{const n=t.function&&t.function.name;return used.has(n)||(TOOL_KW[n]?TOOL_KW[n].test(users):true)})}
 const AI_SYS=()=>AI_SYS_TXT+'\nOggi è '+new Date().toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'.';
 const AI_TOOLS=[
  {type:'function',function:{name:'apri_programma',description:'Apre un programma del computer',parameters:{type:'object',properties:{nome:{type:'string',enum:['internet','word','excel','presentazioni','disegno','pdf','file','impostazioni','calcolatrice','note','video','negozio']}},required:['nome']}}},
@@ -1874,10 +1889,6 @@ function renderAssistant(b,opts){
     const hello=()=>{if(!msgs.length)log.innerHTML=`<div class="ai-hint"><b>Cosa posso fare?</b>${['Scrivimi un preventivo per l’installazione di 3 condizionatori','Che tempo farà domani a Roma?','Ho nuove email?','Ricordami alle 17 di chiamare Rossi','Come vanno i mercati?','Dimmi le notizie','Installami Spotify','Riassumimi l’ultimo PDF'].map(t=>`<button class="ai-chip">${t}</button>`).join('')}</div>`;
       $$('.ai-chip',log).forEach(c=>c.onclick=()=>{ta.value=c.textContent;go()})};
     hello();
-    // appena si apre, il cervello legge già le sue istruzioni (le parti fisse): la prima domanda arriva più in fretta
-    if(!window.__aiWarm||window.__aiWarm!==ST.model+':'+ST.port){window.__aiWarm=ST.model+':'+ST.port;
-      fetch(`http://127.0.0.1:${ST.port}/v1/chat/completions`,{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({messages:[{role:'system',content:AI_SYS()},{role:'user',content:'ciao'}],tools:AI_TOOLS,max_tokens:1,cache_prompt:true,chat_template_kwargs:{enable_thinking:false}})}).catch(()=>{})}
     const add=(role,html)=>{const h=$('.ai-hint',log);if(h)h.remove();const d=document.createElement('div');d.className='ai-msg '+role;d.innerHTML=html;if(role==='bot'&&/<(table|div|details|button|ul|ol)\b|class="err"/.test(html))d.classList.add('keep');log.appendChild(d);log.scrollTop=log.scrollHeight;return d};
     ta.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();go()}};
     // ---- ragionamento: si può riaprire per vedere come ci è arrivato
@@ -1886,7 +1897,7 @@ function renderAssistant(b,opts){
     // ---- voce: risposte lette ad alta voce (Piper) e domande dette al microfono (whisper.cpp)
     const vsel=$('[data-voice]',body),mic=$('[data-mic]',body);let VOICE='f';try{const v=localStorage.getItem('rise.ai.voice');if(v!==null)VOICE=v}catch(e){}
     fetch(`http://127.0.0.1:${ST.port}/v1/chat/completions`,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({messages:[{role:'system',content:AI_SYS()},{role:'user',content:'ciao'}],tools:AI_TOOLS,max_tokens:1,cache_prompt:true})}).catch(()=>{});
+      body:JSON.stringify({messages:[{role:'system',content:AI_SYS()},{role:'user',content:'ciao'}],max_tokens:1,cache_prompt:true,chat_template_kwargs:{enable_thinking:false}})}).catch(()=>{});
     const thk=$('[data-think]',body);let THINK=false;try{const v=localStorage.getItem('rise.ai.think2');if(v!==null)THINK=v==='1'}catch(e){}
     thk.checked=THINK;thk.onchange=()=>{THINK=thk.checked;try{localStorage.setItem('rise.ai.think2',THINK?'1':'0')}catch(e){}};
     vsel.value=VOICE;if(VOICE)SYS.call('voice.warm').catch(()=>{});
@@ -2354,7 +2365,7 @@ function renderAssistant(b,opts){
         ctrl=new AbortController();
         let res;
         try{res=await fetch(`http://127.0.0.1:${ST.port}/v1/chat/completions`,{method:'POST',headers:{'Content-Type':'application/json'},signal:ctrl.signal,
-          body:JSON.stringify({messages:[{role:'system',content:AI_SYS()},...msgs.slice(-12)],tools:AI_TOOLS,stream:true,return_progress:true,max_tokens:8000,cache_prompt:true,chat_template_kwargs:{enable_thinking:useThink}})});
+          body:JSON.stringify({messages:[{role:'system',content:AI_SYS()},...msgs.slice(-12)],...(()=>{const t=pickTools(msgs);return t.length?{tools:t}:{}})(),stream:true,return_progress:true,max_tokens:8000,cache_prompt:true,chat_template_kwargs:{enable_thinking:useThink}})});
           if(!res.ok)throw new TypeError('http '+res.status)}
         catch(e){if(e.name!=='AbortError'&&!restarted){restarted=true;await restartEngine();out.remove();round--;continue}throw e}
         // sorveglianza: se per troppo tempo non arriva niente, si interrompe e si riprova
