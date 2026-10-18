@@ -863,7 +863,9 @@ $('#screen').addEventListener('contextmenu',e=>{if(e.target.closest('.win'))retu
 const startEl=$('#start'),q=$('#q'),orb=$('#orb');
 function closePops(keep){$$('.drop-card').forEach(x=>{if(!keep&&x.querySelector('[data-y]')&&x.textContent.includes('vuole inviarti'))x.querySelector('[data-n]').click();x.remove()});startEl.hidden=true;$('#quick').hidden=true;orb.setAttribute('aria-expanded','false');if(ROLE==='popup'&&!keep)SYS.call('popup.hide').catch(()=>{})}
 function openStart(){if(MW&&NATIVE)SYS.call('native.list').then(l=>{NAPPS=l||[];if(!startEl.hidden)renderStart()}).catch(()=>{});startEl.hidden=false;orb.setAttribute('aria-expanded','true');q.value='';renderStart();setTimeout(()=>q.focus(),30)}
-window.__risePopup=(k,data)=>{closePops(true);$$('.drop-card').forEach(x=>x.remove());if(k==='quick')openQuick();else if(k==='drop')dropAsk(data);else if(k==='dropdone')dropDone(data);else if(k==='remind')remindCard(data);else openStart()};
+window.__risePopup=(k,data)=>{closePops(true);$$('.drop-card').forEach(x=>x.remove());try{if(k==='quick')openQuick();else if(k==='drop')dropAsk(data);else if(k==='dropdone')dropDone(data);else if(k==='remind')remindCard(data);else openStart()}catch(e){}
+  // sicurezza: se non si vede niente (errore, contenuto vuoto) il livello invisibile non deve bloccare mouse e tastiera
+  setTimeout(()=>{if(ROLE!=='popup')return;const vis=[startEl,$('#quick'),...$$('.drop-card')].some(x=>x&&!x.hidden&&x.offsetWidth>0);if(!vis)SYS.call('popup.hide').catch(()=>{})},400)};
 function dropCard(html){const c=document.createElement('div');c.className='pop drop-card';c.innerHTML=html;c.onclick=e=>e.stopPropagation();document.body.appendChild(c);return c}
 function dropAsk(r){const c=dropCard(`<div class="dc-head">${I('net',40)}<div><b>${esc(r.from)}</b> vuole inviarti ${r.count===1?'un file':r.count+' file'}<br><small>${fsize(r.size)} · arriveranno nella cartella Download</small></div></div>
   <ul class="dc-files">${r.files.map(f=>`<li>${fileIcon(f,18)}${esc(f)}</li>`).join('')}${r.count>r.files.length?`<li class="more">e altri ${r.count-r.files.length}…</li>`:''}</ul>
