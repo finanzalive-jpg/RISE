@@ -36,6 +36,12 @@ if [ ! -f "$ST" ] || [ /etc/rise-build -nt "$ST" ] || [ ! -f /usr/share/themes/R
   sudo -n /usr/local/bin/rise-cinnamon-setup >/tmp/rise-cinnamon-setup.log 2>&1
 fi
 
+# programmi installati dal Negozio (Flatpak): devono comparire nel menu
+case ":${XDG_DATA_DIRS:-/usr/local/share:/usr/share}:" in
+  *flatpak*) ;;
+  *) export XDG_DATA_DIRS="$HOME/.local/share/flatpak/exports/share:/var/lib/flatpak/exports/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" ;;
+esac
+
 # tastiera italiana anche prima che Cinnamon carichi le sue impostazioni
 setxkbmap it 2>/dev/null
 
