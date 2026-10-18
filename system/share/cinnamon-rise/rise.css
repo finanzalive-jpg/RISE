@@ -1,0 +1,53 @@
+/* ===== Rise: barra e menu in stile Windows 7 (vetro blu) — si aggiunge in fondo al tema di Cinnamon ===== */
+.panel-top, .panel-bottom, .panel-left, .panel-right {
+  font-weight: normal;
+  color: #ffffff;
+  background-gradient-direction: vertical;
+  background-gradient-start: rgba(70, 120, 160, 0.82);
+  background-gradient-end: rgba(14, 44, 70, 0.92); }
+.panel-bottom { box-shadow: inset 0 1px rgba(200, 230, 255, 0.55); }
+#panel:highlight { background-color: rgba(60, 130, 200, 0.6); }
+
+/* pulsante Start: il cerchio di Rise, con un alone quando ci passi sopra */
+.applet-box.menu-applet-panel-label, .menu-applet-panel-label { padding: 0 6px; }
+.applet-box:hover { background-color: rgba(255, 255, 255, 0.14); border-radius: 6px; }
+.applet-box:checked { background-color: rgba(120, 190, 255, 0.28); border-radius: 6px; }
+
+/* finestre nella barra: pulsanti di vetro come Windows 7 */
+.grouped-window-list-item-box {
+  padding: 0 9px; margin: 3px 1px; border-radius: 5px;
+  border: 1px solid transparent; }
+.grouped-window-list-item-box:hover {
+  background-gradient-direction: vertical;
+  background-gradient-start: rgba(255, 255, 255, 0.28);
+  background-gradient-end: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.45); }
+.grouped-window-list-item-box:focus, .grouped-window-list-item-box:active {
+  background-gradient-direction: vertical;
+  background-gradient-start: rgba(160, 210, 255, 0.45);
+  background-gradient-end: rgba(60, 120, 190, 0.35);
+  border: 1px solid rgba(200, 230, 255, 0.7); }
+.grouped-window-list-item-box.top, .grouped-window-list-item-box.bottom { border-bottom-width: 1px; }
+
+/* menu, calendario e riquadri a comparsa: vetro scuro con angoli arrotondati */
+.popup-menu-content {
+  background-gradient-direction: vertical;
+  background-gradient-start: rgba(28, 72, 104, 0.97);
+  background-gradient-end: rgba(12, 38, 58, 0.97);
+  border: 1px solid rgba(170, 215, 255, 0.45);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55); }
+.popup-menu-item:active, .menu-application-button-selected, .menu-category-button-selected {
+  background-color: rgba(120, 190, 255, 0.30); border-radius: 5px; }
+.menu-favorites-box {
+  background-color: rgba(255, 255, 255, 0.07); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.12); }
+.menu #menu-search-entry, .menu-search-box StEntry {
+  background-color: rgba(255, 255, 255, 0.95); color: #10283a; border-radius: 14px;
+  border: 1px solid rgba(160, 210, 255, 0.8); caret-color: #10283a; }
+
+/* notifiche */
+.notification {
+  background-gradient-direction: vertical;
+  background-gradient-start: rgba(30, 76, 110, 0.97);
+  background-gradient-end: rgba(14, 42, 64, 0.97);
+  border: 1px solid rgba(170, 215, 255, 0.45); border-radius: 10px; color: #fff; }

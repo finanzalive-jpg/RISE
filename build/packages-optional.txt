@@ -9,3 +9,5 @@ ieee-data
 bluez-obexd
 # Video accelerati dalla scheda grafica (YouTube più fluido, meno processore): driver Intel recenti e plugin VA
 intel-media-va-driver gstreamer1.0-plugins-bad
+# Bluetooth: icona nella barra per accendere e associare
+blueman

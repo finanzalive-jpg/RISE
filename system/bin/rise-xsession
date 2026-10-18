@@ -1,0 +1,49 @@
+#!/bin/sh
+# Rise – il desktop (Cinnamon) dentro la sessione grafica X. Lo avvia rise-session con startx.
+export XDG_SESSION_TYPE=x11
+export XDG_CURRENT_DESKTOP=X-Cinnamon
+export XDG_SESSION_DESKTOP=cinnamon
+export DESKTOP_SESSION=cinnamon
+export GDK_BACKEND=x11
+unset WAYLAND_DISPLAY
+# lingua del sistema (italiano), anche se chi avvia la sessione non l'ha passata
+if [ -z "$LANG" ] || [ "$LANG" = C ] || [ "$LANG" = C.UTF-8 ]; then
+  [ -r /etc/default/locale ] && . /etc/default/locale
+  export LANG="${LANG:-it_IT.UTF-8}"
+fi
+[ "$LANG" = C.UTF-8 ] && export LANG=it_IT.UTF-8
+export LANGUAGE="${LANGUAGE:-it_IT:it}"
+
+# grafica: come per il desktop classico (schede Intel recenti accelerate, le altre in modalità prudente)
+SAFE=1
+for d in /sys/class/drm/card*/device; do
+  [ "$(cat "$d/vendor" 2>/dev/null)" = "0x8086" ] || continue
+  case "$(cat "$d/device" 2>/dev/null)" in
+    0x010*|0x011*|0x012*|0x015*|0x016*|0x040*|0x041*|0x042*|0x0a0*|0x0a1*|0x0a2*|0x0c0*|0x0c1*|0x0c2*|0x0d0*|0x0d1*|0x0d2*|0x0f3*)
+      export RISE_SAFE_GPU=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 ;;
+    *) SAFE=0 ;;
+  esac
+done
+systemd-detect-virt -q && SAFE=1
+[ -f "$HOME/.config/rise/grafica-prudente" ] && SAFE=1
+if [ "$SAFE" = 1 ]; then
+  export WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBVA_DRIVER_NAME=none
+fi
+
+# dopo un aggiornamento fatto da una versione vecchia di Rise: tema, pulsante Start e impostazioni del desktop
+ST=/var/lib/rise/cinnamon-setup.stamp
+if [ ! -f "$ST" ] || [ /etc/rise-build -nt "$ST" ] || [ ! -f /usr/share/themes/Rise/cinnamon/cinnamon.css ]; then
+  sudo -n /usr/local/bin/rise-cinnamon-setup >/tmp/rise-cinnamon-setup.log 2>&1
+fi
+
+# tastiera italiana anche prima che Cinnamon carichi le sue impostazioni
+setxkbmap it 2>/dev/null
+
+# cartelle in italiano (Scrivania, Documenti…) e impostazioni di Rise al primo accesso
+xdg-user-dirs-update 2>/dev/null
+/usr/local/bin/rise-firstrun 2>>/tmp/rise-firstrun.log
+
+if command -v dbus-update-activation-environment >/dev/null; then
+  dbus-update-activation-environment --systemd --all 2>/dev/null
+fi
+exec cinnamon-session --session cinnamon

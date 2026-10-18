@@ -79,6 +79,8 @@ NATIVE = [
 
 
 def url_for(**params):
+    if os.environ.get('RISE_DESK'):
+        params.setdefault('desk', os.environ['RISE_DESK'])
     q = urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})
     return 'file://' + BASE + ('?' + q if q else '')
 
@@ -98,6 +100,7 @@ class Rise(Gtk.Application):
         self.windows = {}        # nome -> Gtk.Window
         self.started = False
         self.multi = False
+        self.x11 = False
         self.toplevels = None
         self.popup_kind = None
         self.drop = None
@@ -108,7 +111,17 @@ class Rise(Gtk.Application):
         if not self.started:
             self.started = True
             self.boot()
-        if '--start' in args:
+        if '--wake' in args:
+            # scorciatoia da tastiera per chiamare l'Assistente (come dire "Ehi Sara")
+            i = args.index('--wake')
+            self.wake_fire(args[i + 1] if i + 1 < len(args) and args[i + 1] in ('f', 'm') else None)
+        elif '--test-lip' in args:
+            # prova della bocca della figura: 3 secondi di "parlato" finto
+            import math
+            import risevoice
+            env = [abs(math.sin(i / 3.0)) * (0.6 + 0.4 * math.sin(i / 11.0)) for i in range(150)]
+            risevoice._lip.update(env=env, step=0.02, t0=time.time() + 0.2, seq=risevoice._lip.get('seq', 0) + 1)
+        elif '--start' in args:
             self.popup_toggle('start')
         elif '--open' in args:
             i = args.index('--open')
@@ -120,6 +133,15 @@ class Rise(Gtk.Application):
     def boot(self):
         self.hold()
         transparent(None)
+        disp = Gdk.Display.get_default()
+        self.x11 = disp is not None and 'X11' in type(disp).__name__ and os.environ.get('RISE_SINGLE') != '1'
+        if self.x11:
+            os.environ['RISE_DESK'] = 'cinnamon'
+            # desktop Cinnamon: barra, menu e icone sono di Cinnamon; qui solo la figura, i riquadri e le app di Rise
+            self.multi = True
+            self.boot_x11()
+            self.start_services()
+            return
         self.multi = LS is not None and LS.is_supported() and os.environ.get('RISE_SINGLE') != '1'
         if not self.multi:
             win = self.make_window('full', url_for(role='full'), Gtk.ApplicationWindow(application=self))
@@ -162,8 +184,13 @@ class Rise(Gtk.Application):
         LS.set_exclusive_zone(o, -1)
         LS.set_keyboard_mode(o, LS.KeyboardMode.EXCLUSIVE)
         self.make_window('popup', url_for(role='popup'), o)
-        # elenco delle finestre aperte
+        self.start_services()
+
+    def start_services(self):
+        # elenco delle finestre aperte (solo desktop classico: su Cinnamon la barra è di Cinnamon)
         try:
+            if self.x11:
+                raise RuntimeError('barra di Cinnamon')
             from risewl.toplevels import Toplevels
             self.toplevels = Toplevels(lambda lst: GLib.idle_add(self.push_toplevels, lst))
             if not self.toplevels.start():
@@ -197,6 +224,75 @@ class Rise(Gtk.Application):
             risevoice.wake_start(lambda who: GLib.idle_add(self.wake_fire, who))
         except Exception as e:
             print('attivazione a voce non attiva:', e, file=sys.stderr)
+
+    # ---------------- desktop Cinnamon (X11) ----------------
+    def boot_x11(self):
+        import risex11
+        self.rx = risex11
+        fw, fh = 270, 300
+        f = Gtk.Window(application=self)
+        f.set_decorated(False)
+        f.set_resizable(False)
+        f.set_default_size(fw, fh)
+        f.set_title('Rise')
+        self.make_window('figure', url_for(role='figure'), f)
+
+        def realized(*_):
+            risex11.prepare(risex11.xid_of(f), wm_class=('rise-figure', 'Rise'), kind=None,
+                            states=('below', 'skip_taskbar', 'skip_pager'), sticky=True)
+
+        def mapped(*_):
+            xid = risex11.xid_of(f)
+            x, y, w, h = risex11.workarea()
+            risex11.move(xid, x + w - fw - 6, y + 6)
+            risex11.set_states(xid, ('below', 'skip_taskbar', 'skip_pager', 'sticky'))
+        f.connect('realize', realized)
+        f.connect('map', mapped)
+        f.present()
+        self.make_popup_x11()
+
+    def make_popup_x11(self):
+        pw, ph = 440, 340
+        o = Gtk.Window(application=self)
+        o.set_decorated(False)
+        o.set_resizable(False)
+        o.set_default_size(pw, ph)
+        o.set_title('Rise')
+        self.x11_window(o, 'rise-popup', states=('above', 'skip_taskbar', 'skip_pager'), kind='utility')
+
+        def placed(*_):
+            x, y, w, h = self.rx.workarea()
+            self.rx.move(self.rx.xid_of(o), x + w - pw - 8, y + h - ph - 8)
+        o.connect('map', placed)
+        self.make_window('popup', url_for(role='popup'), o)   # la pagina si carica subito, la finestra resta nascosta
+
+    def x11_window(self, w, wm, states=(), kind=None, icon=None):
+        rx = getattr(self, 'rx', None)
+        if not rx:
+            return
+
+        def realized(*_):
+            rx.prepare(rx.xid_of(w), wm_class=(wm, 'Rise'), kind=kind, states=states)
+
+        def mapped(*_):
+            if icon and os.path.exists(icon):
+                rx.set_icon(rx.xid_of(w), icon)
+        w.connect('realize', realized)
+        w.connect('map', mapped)
+
+    def figure_visible(self, a, _name=None):
+        f = self.windows.get('figure')
+        if f is not None:
+            f.set_visible(bool(a.get('on', True)))
+        return {'ok': True}
+
+    def notify(self, a, _name=None):
+        try:
+            subprocess.Popen(['notify-send', '-a', 'Rise', '-i', a.get('icon') or 'rise-assistant', a.get('title') or 'Rise',
+                              str(a.get('text', ''))[:400]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
+        return {'ok': True}
 
     def check_panel(self):
         # la barra deve essere alta BAR_H: se il sistema l'ha fatta più bassa, la rimette a posto
@@ -259,6 +355,9 @@ class Rise(Gtk.Application):
         threading.Thread(target=self.run_cmd, args=(name, msg), daemon=True).start()
 
     def run_cmd(self, name, msg):
+        if msg.get('cmd') in ('voice.say', 'voice.listen'):
+            fig = 'figure' if 'figure' in self.views else 'desktop'
+            GLib.idle_add(self.js, fig, 'window.__riseFast && window.__riseFast()')
         fn = risesys.CMDS.get(msg.get('cmd'))
         try:
             res = {'data': fn(msg.get('args') or {})} if fn else {'error': 'comando sconosciuto'}
@@ -303,6 +402,8 @@ class Rise(Gtk.Application):
     def app_open(self, a, _name=None):
         aid = str(a.get('id', ''))
         key = 'app:' + aid
+        if getattr(self, 'x11', False) and aid == 'files':
+            return self.open_folder_native(a.get('goto'))
         if key in self.windows:
             w = self.windows[key]
             # dopo un aggiornamento la finestra già aperta ha ancora la pagina vecchia: si ricarica
@@ -328,6 +429,8 @@ class Rise(Gtk.Application):
         w.set_title(a.get('title') or aid)
         w.set_default_size(int(a.get('w', 820)), int(a.get('h', 560)))
         goto = a.get('goto')
+        if getattr(self, 'x11', False):
+            self.x11_window(w, 'rise-' + aid, icon='/usr/share/icons/hicolor/48x48/apps/rise-%s.png' % aid)
         self.make_window(key, url_for(role='app', app=aid,
                                       goto=json.dumps(goto) if goto is not None else None), w)
 
@@ -424,7 +527,13 @@ class Rise(Gtk.Application):
         self.js('panel', 'window.__risePopupState && window.__risePopupState(%s)' % json.dumps(self.popup_kind))
         return {'ok': True}
 
-    def wake_fire(self, who):
+    def wake_fire(self, who=None):
+        if who not in ('f', 'm'):
+            try:
+                import json as _j
+                who = (_j.load(open(os.path.expanduser('~/.config/rise/attivazione.json'))).get('voce') or 'f')
+            except Exception:
+                who = 'f'
         # la figura sul desktop si gira ad ascoltare, l'Assistente si apre già in ascolto
         self.broadcast('window.__riseWake && window.__riseWake(%s)' % json.dumps(who))
         goto = {'wake': who, 't': time.time()}
@@ -625,6 +734,28 @@ class Rise(Gtk.Application):
         else:
             self.broadcast("window.openApp && window.openApp('viewer', {goto: %s})" % json.dumps(goto))
 
+    def cinnamon_settings(self, a, _name=None):
+        panel = str(a.get('panel') or '')
+        cmd = ['cinnamon-settings'] + ([panel] if panel.isalnum() else [])
+        try:
+            subprocess.Popen(cmd, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            return {'ok': False}
+        return {'ok': True}
+
+    def open_folder_native(self, goto):
+        path = os.path.expanduser('~')
+        g = goto if isinstance(goto, str) else ''
+        if g.startswith('fs:'):
+            path = os.path.expanduser(g[3:] or '~')
+        elif g.startswith('pc:'):
+            path = g[3:] or 'computer:///'
+        fm = shutil.which('nemo') or shutil.which('xdg-open')
+        if fm:
+            subprocess.Popen([fm, path], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return {'ok': True}
+        return {'ok': False}
+
     def info(self, _a, name):
         return {'multi': self.multi, 'toplevels': bool(self.toplevels), 'role': name}
 
@@ -634,7 +765,7 @@ UI_CMDS = {
     'win.state': Rise.win_state, 'win.fit': Rise.win_fit, 'popup.show': Rise.popup_show, 'popup.hide': Rise.popup_hide,
     'native.list': Rise.native_list, 'native.open': Rise.native_open, 'top.action': Rise.top_action,
     'state.changed': Rise.state_changed, 'shell.info': Rise.info, 'drop': Rise.drop_cmd,
-    'open.with': Rise.open_with,
+    'open.with': Rise.open_with, 'figure.visible': Rise.figure_visible, 'notify': Rise.notify, 'cinnamon.settings': Rise.cinnamon_settings,
 }
 
 if __name__ == '__main__':

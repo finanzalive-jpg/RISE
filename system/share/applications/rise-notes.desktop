@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Note
+Comment=Appunti veloci
+Exec=rise-shell --open notes
+Icon=rise-notes
+StartupWMClass=rise-notes
+Categories=Utility;
+Terminal=false
+

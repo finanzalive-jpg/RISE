@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""Rise – impostazioni predefinite del desktop Cinnamon (pulsante Start, programmi fissati nella barra).
+Va eseguito come amministratore dopo l'installazione o un aggiornamento (lo fanno la ISO e rise-update)."""
+import json
+import os
+import subprocess
+
+A = '/usr/share/cinnamon/applets'
+CHANGES = {
+    'menu@cinnamon.org': {'menu-custom': True, 'menu-icon': 'rise-orb', 'menu-icon-size': 30, 'menu-label': ''},
+    'grouped-window-list@cinnamon.org': {'pinned-apps': ['org.gnome.Epiphany.desktop', 'nemo.desktop', 'rise-assistant.desktop']},
+}
+for applet, keys in CHANGES.items():
+    p = os.path.join(A, applet, 'settings-schema.json')
+    try:
+        d = json.load(open(p))
+    except (OSError, ValueError):
+        continue
+    changed = False
+    for k, v in keys.items():
+        if k in d and d[k].get('default') != v:
+            d[k]['default'] = v
+            changed = True
+    if changed:
+        json.dump(d, open(p, 'w'), indent=2, ensure_ascii=False)
+        print('aggiornato', applet)
+# tema "Rise" per barra e menu: il tema di Cinnamon con in fondo lo stile Rise (rigenerato a ogni aggiornamento)
+import shutil
+src, dst = '/usr/share/cinnamon/theme', '/usr/share/themes/Rise/cinnamon'
+extra = '/usr/share/cinnamon-rise/rise.css'
+if os.path.isdir(src) and os.path.exists(extra):
+    shutil.rmtree(dst, ignore_errors=True)
+    shutil.copytree(src, dst)
+    with open(os.path.join(dst, 'cinnamon.css'), 'a') as f:
+        f.write('\n' + open(extra).read())
+    print('tema Rise pronto')
+# lingua italiana di sistema (serve al desktop Cinnamon)
+try:
+    if 'LANG=' not in open('/etc/default/locale').read():
+        raise OSError
+except OSError:
+    try:
+        open('/etc/default/locale', 'a').write('LANG=it_IT.UTF-8\n')
+    except OSError:
+        pass
+# impostazioni predefinite (sfondo, tema, barra…) e menu
+subprocess.run(['glib-compile-schemas', '/usr/share/glib-2.0/schemas'], check=False)
+for c in (['gtk-update-icon-cache', '-q', '-f', '/usr/share/icons/hicolor'], ['update-desktop-database', '-q', '/usr/share/applications']):
+    try:
+        subprocess.run(c, check=False)
+    except OSError:
+        pass
+# segno che le impostazioni sono state applicate per questa versione (lo controlla rise-xsession)
+try:
+    os.makedirs('/var/lib/rise', exist_ok=True)
+    open('/var/lib/rise/cinnamon-setup.stamp', 'w').write(open('/etc/rise-build').read() if os.path.exists('/etc/rise-build') else '')
+except OSError:
+    pass

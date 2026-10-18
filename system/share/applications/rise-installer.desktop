@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Installa Rise
+Comment=Installa Rise sul computer accanto a Windows, senza toccarlo
+Exec=rise-shell --open installer
+Icon=rise-installer
+StartupWMClass=rise-installer
+Categories=System;
+Terminal=false
+NoDisplay=true
