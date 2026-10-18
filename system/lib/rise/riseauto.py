@@ -84,12 +84,23 @@ def _split_place(text):
     return t, None
 
 
+_NAMED = re.compile(r'(?:^|\s|,)(?:e\s+)?(?:la\s+)?(?:chiamala|chiamata|chiamarla|che si chiami|che si chiama|di nome|con (?:il )?nome|nominala|dalle il nome|col nome|con scritto)\s+["“]?(.+?)["”]?\s*$', re.I)
+
+
 def make_folder(a):
-    raw = (a.get('nome') or a.get('name') or a.get('testo') or '').strip()
-    raw, base = _split_place(raw)
-    raw = re.sub(r'^(?:una\s+)?(?:nuova\s+)?cartella\s+', '', raw, flags=re.I)
+    raw = (a.get('nome') or a.get('name') or a.get('testo') or '').strip().rstrip('.!?')
+    # "cartella sul desktop e chiamala preventivi": il nome è quello dopo "chiamala"
+    named = _NAMED.search(raw)
+    if named:
+        rest, nm = raw[:named.start()].strip(' ,'), named.group(1)
+        rest2, base0 = _split_place(rest)
+        nm2, base1 = _split_place(nm)
+        raw, base = nm2.strip(), (base1 or base0)
+    else:
+        raw, base = _split_place(raw)
+    raw = re.sub(r'^(?:una\s+)?(?:nuova\s+)?cartella(?:\s+|$)', '', raw.strip(' ,;:'), flags=re.I)
     raw = re.sub(r'^(?:chiamata|di nome|con nome|con il nome|nominata)\s+', '', raw, flags=re.I).strip(' "“”\'')
-    name = re.sub(r'[\\/:*?"<>|]+', ' ', raw)[:80].strip()
+    name = re.sub(r'[\\/:*?"<>|]+', ' ', raw)[:80].strip(' ,;:.')
     if not name:
         return {'ok': False, 'message': 'Come la chiamo?'}
     if not base:
