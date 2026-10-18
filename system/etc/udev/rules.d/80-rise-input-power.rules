@@ -1,0 +1,6 @@
+# Rise – mouse, tastiere e touchpad non vanno mai "a dormire": altrimenti, dopo un po' che il PC è fermo,
+# il puntatore resta bloccato finché non si preme un tasto.
+ACTION=="add|change", SUBSYSTEM=="usb", ATTR{bInterfaceClass}=="03", TEST=="../power/control", ATTR{../power/control}="on"
+ACTION=="add|change", SUBSYSTEM=="usb", DRIVER=="usbhid", TEST=="power/control", ATTR{power/control}="on"
+ACTION=="add|change", SUBSYSTEM=="i2c", DRIVER=="i2c_hid_acpi", TEST=="power/control", ATTR{power/control}="on"
+ACTION=="add|change", SUBSYSTEM=="hid", TEST=="power/control", ATTR{power/control}="on"
