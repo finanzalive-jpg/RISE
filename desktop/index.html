@@ -2218,7 +2218,7 @@ function renderAssistant(b,opts){
         $('[data-y]',box).onclick=()=>PENDING&&PENDING.yes();$('[data-n]',box).onclick=()=>PENDING&&PENDING.no();speak(mins?'Spengo tra '+mins+' minuti?':'Spengo il computer?');return true}
       // cartelle: "crea una cartella clienti sul desktop"
       if(P.file&&(m=q.trim().replace(/[?!.]+$/,'').match(/^(?:crea(?:mi)?|fammi|fai|aggiungi|nuova)\s+(.*\bcartella\b.*)$/i))){
-        const r=await SYS.call('auto.mkdir',{testo:m[1]});if(!r.ok){reply(esc(r.message),r.message);return true}const nm=r.path.split('/').pop(),wh=r.where==='Scrivania'?'sul desktop':'in '+r.where;
+        const r=await SYS.call('auto.mkdir',{testo:m[1]});if(!r.ok){reply(esc(r.message),r.message);return true}const nm=r.path.split('/').pop(),wh=/^(Scrivania|Desktop)$/.test(r.where)?'sul desktop':'in '+r.where;
         reply(`${I('folder',18)} ${r.existed?'C’era già':'Ho creato'} la cartella <b>${esc(nm)}</b> ${esc(wh)}.`,(r.existed?'C’era già la cartella ':'Ho creato la cartella ')+nm+' '+wh+'.');openApp('files',{goto:'fs:'+r.path});return true}
       // file: "aprimi il file preventivo rossi", "apri l'ultimo pdf"
       if(P.file&&(m=t.match(/^apri(?:mi)?\s+(?:il\s+file|l'ultimo|l’ultimo|l'ultima|l’ultima|il\s+documento|il\s+preventivo|la\s+foto|il\s+pdf)\s*(.*)$/))){
