@@ -30,6 +30,7 @@ STATUS = os.path.join(STATE, 'status.json')
 # cartelle sostituite per intero; il resto (file singoli) viene copiato sopra
 REPLACE_DIRS = ('usr/local/lib/rise', 'opt/rise')
 # mai sovrascritti: li personalizza l'installazione (utente, accesso automatico)
+LIVE_ONLY = ('casper',)
 KEEP = ('etc/greetd/config.toml', 'etc/casper.conf', 'etc/hostname', 'etc/hosts')
 
 
@@ -155,6 +156,13 @@ def _packages(listfile):
     r = subprocess.run(['dpkg-query', '-W', '-f', '${Package} ${db:Status-Status}\n'] + wanted,
                        capture_output=True, text=True)
     have = {l.split()[0] for l in r.stdout.splitlines() if l.endswith(' installed')}
+    # pacchetti della chiavetta (modalità live): su un computer installato non servono e non vanno messi
+    live = os.path.isdir('/cdrom/casper') or 'boot=casper' in open('/proc/cmdline').read()
+    if not live:
+        wanted = [p for p in wanted if p not in LIVE_ONLY]
+        if 'casper' in have:
+            subprocess.run(['apt-get', 'purge', '-y', '-qq', 'casper'], env=dict(os.environ, DEBIAN_FRONTEND='noninteractive'),
+                           timeout=600, capture_output=True)
     missing = [p for p in wanted if p not in have]
     if not missing:
         return []
