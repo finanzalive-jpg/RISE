@@ -15,6 +15,10 @@ fix_dir DESKTOP Scrivania; fix_dir DOCUMENTS Documenti; fix_dir DOWNLOAD Downloa
 fix_dir MUSIC Musica; fix_dir VIDEOS Video
 DESK="$(xdg-user-dir DESKTOP 2>/dev/null)"; [ -n "$DESK" ] && [ "$DESK" != "$HOME" ] || DESK="$HOME/Scrivania"
 mkdir -p "$DESK" "$HOME/.local/share/applications"
+# icone del desktop libere (come Windows): niente "disposizione automatica" che le rimette in colonna
+if [ ! -f "$HOME/.config/rise/desktop-libero" ]; then
+  gio set "$DESK" metadata::nemo-icon-view-auto-layout false 2>/dev/null && { mkdir -p "$HOME/.config/rise"; : > "$HOME/.config/rise/desktop-libero"; }
+fi
 INST=/usr/share/applications/rise-installer.desktop
 if [ -d /cdrom/casper ] || grep -q 'boot=casper' /proc/cmdline 2>/dev/null; then
   # dalla chiavetta: "Installa Rise" sul desktop e nel menu
