@@ -265,5 +265,6 @@ mkdir -p "$ISO/boot/grub/themes/rise" && cp "$ROOT/system/share/grub-theme/"* "$
 log "9/9 ISO avviabile (BIOS + UEFI)"
 grub-mkrescue -o "$OUT/$NAME.iso" "$ISO" -- -volid "RISE_${VERSION//./}"
 ( cd "$OUT" && sha256sum "$NAME.iso" > "$NAME.iso.sha256" )
+cp "$ISO/casper/filesystem.manifest" "$OUT/$NAME.packages.txt"
 ls -lh "$OUT"
 echo "Fatto: $OUT/$NAME.iso"
