@@ -11,25 +11,30 @@ if systemd-detect-virt -q; then
   export WEBKIT_DISABLE_DMABUF_RENDERER=1
 fi
 
-# Stabilità su schede video vecchie e su quelle con driver fragili:
-# - le pagine web si disegnano senza memoria video condivisa (evita blocchi della grafica);
-# - i video (YouTube…) li decodifica il processore: l'accelerazione hardware dei chip Intel
-#   fino al 2014 circa blocca lo schermo mentre l'audio continua.
-export WEBKIT_DISABLE_DMABUF_RENDERER=1
-export GST_PLUGIN_FEATURE_RANK="vaapidecodebin:NONE,vaapih264dec:NONE,vaapivp9dec:NONE,vaapivp8dec:NONE,vaapiav1dec:NONE,vah264dec:NONE,vah265dec:NONE,vavp8dec:NONE,vavp9dec:NONE,vaav1dec:NONE,nvh264dec:NONE,nvh265dec:NONE"
-export LIBVA_DRIVER_NAME=none
-
-# Schede video Intel di 2ª-4ª generazione (circa 2011-2015: Sandy Bridge, Ivy Bridge, Haswell):
-# il browser disegna senza accelerazione 3D, che su questi chip può bloccare la grafica.
+# Prudenza di base (schede video sconosciute, macchine virtuali): le pagine si disegnano senza memoria video
+# condivisa e i video li decodifica il processore. Sulle schede Intel recenti (dal 2015) si usa tutta la
+# grafica: disegno più veloce e video (YouTube…) decodificati dal chip, che consuma molto meno.
+SAFE=1
 for d in /sys/class/drm/card*/device; do
   [ "$(cat "$d/vendor" 2>/dev/null)" = "0x8086" ] || continue
   case "$(cat "$d/device" 2>/dev/null)" in
+    # Intel di 2ª-4ª generazione (circa 2011-2015): la grafica 3D del browser può bloccarsi
     0x010*|0x011*|0x012*|0x015*|0x016*|0x040*|0x041*|0x042*|0x0a0*|0x0a1*|0x0a2*|0x0c0*|0x0c1*|0x0c2*|0x0d0*|0x0d1*|0x0d2*|0x0f3*)
       export RISE_SAFE_GPU=1
       export WEBKIT_DISABLE_COMPOSITING_MODE=1
       echo "scheda video Intel vecchia: modalità grafica prudente" ;;
+    *) SAFE=0 ;;
   esac
 done
+systemd-detect-virt -q && SAFE=1
+[ -f "$HOME/.config/rise/grafica-prudente" ] && SAFE=1
+if [ "$SAFE" = 1 ]; then
+  export WEBKIT_DISABLE_DMABUF_RENDERER=1
+  export GST_PLUGIN_FEATURE_RANK="vaapidecodebin:NONE,vaapih264dec:NONE,vaapivp9dec:NONE,vaapivp8dec:NONE,vaapiav1dec:NONE,vah264dec:NONE,vah265dec:NONE,vavp8dec:NONE,vavp9dec:NONE,vaav1dec:NONE,nvh264dec:NONE,nvh265dec:NONE"
+  export LIBVA_DRIVER_NAME=none
+else
+  echo "scheda video Intel recente: grafica e video accelerati"
+fi
 
 fails=0
 while :; do
@@ -37,6 +42,12 @@ while :; do
   [ -f "$LOG" ] && mv -f "$LOG" "$LOG.prima"
   [ -f /tmp/rise-shell.log ] && mv -f /tmp/rise-shell.log /tmp/rise-shell.log.prima
   start=$(date +%s)
+  # due chiusure di fila con la grafica accelerata: si torna alla modalità prudente (e la si ricorda)
+  if [ "$fails" -ge 2 ] && [ "$SAFE" = 0 ]; then
+    SAFE=1; mkdir -p "$HOME/.config/rise"; : > "$HOME/.config/rise/grafica-prudente"
+    export WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBVA_DRIVER_NAME=none
+    echo "la sessione si è chiusa due volte: grafica prudente"
+  fi
   if [ "$fails" -lt 3 ] && command -v labwc >/dev/null 2>&1; then
     labwc >"$LOG" 2>&1
   else

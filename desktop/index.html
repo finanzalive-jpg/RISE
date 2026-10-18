@@ -357,7 +357,9 @@ select{height:34px;border-radius:4px;border:1px solid #8fa9b8;padding:0 10px;fon
 .ai-msg.bot{align-self:flex-start;background:#fff;border:1px solid var(--line);border-bottom-left-radius:4px}
 .ai-msg.tool{align-self:center;background:#eaf3ea;border:1px solid #b9dcb9;font-size:.92em;display:flex;align-items:center;gap:8px}
 #figure{position:absolute;top:10px;right:18px;z-index:1;width:auto;height:230px;cursor:pointer;filter:none;transition:filter .4s,transform .4s;transform-origin:50% 100%}
-#figure canvas{height:230px;width:auto;display:block;animation:figbreath 5.5s ease-in-out infinite;transform-origin:50% 100%}
+#figure canvas{height:230px;width:auto;display:block;transform-origin:50% 100%}
+/* il "respiro" solo mentre parla o ascolta: un'animazione continua sul desktop fa ridisegnare lo schermo 60 volte al secondo */
+#figure.talk canvas,#figure.listen canvas{animation:figbreath 5.5s ease-in-out infinite}
 #figure.listen{filter:drop-shadow(0 0 14px rgba(120,190,255,.55));transform:scale(1.04) rotate(-1deg)}
 #figure.talk{filter:drop-shadow(0 0 12px rgba(90,160,255,.35))}
 #figure[hidden]{display:none}
@@ -1800,7 +1802,7 @@ const aiName=v=>((S.aiNames||{})[v]||(v==='m'?'Nicola':'Sara'));
 const RiseFigure=(function(){
   function make(canvas,who){
     const W=FIG_W[who],H=FIG_H,ctx=canvas.getContext('2d'),img=new Image();canvas.width=W;canvas.height=H;
-    let ready=false,open=0,target=0,shape=2,blink=0,blinkAt=performance.now()+1500,blinkT=0,alive=true,last=0,dirty=true;
+    let ready=false,open=0,target=0,shape=2,blink=0,blinkAt=performance.now()+1500,blinkT=0,alive=true,last=0,dirty=true,sleep=0;
     img.onload=()=>{ready=true;dirty=true};img.src=FIG_IMG[who];
     const put=(k,a)=>{if(a<=0.01)return;ctx.globalAlpha=Math.min(1,a);ctx.drawImage(img,k*W,0,W,H,0,0,W,H)};
     function draw(){ctx.clearRect(0,0,W,H);ctx.globalAlpha=1;ctx.drawImage(img,0,0,W,H,0,0,W,H);
@@ -1812,9 +1814,11 @@ const RiseFigure=(function(){
       if(!blinkT&&now>blinkAt)blinkT=now;let b=0;
       if(blinkT){const t=(now-blinkT)/190;b=t<1?Math.sin(t*Math.PI):0;if(t>=1){blinkT=0;blinkAt=now+2400+Math.random()*3800}}
       if(ready&&(dirty||Math.abs(open-prev)>0.004||Math.abs(b-blink)>0.01||(b===0&&blink!==0))){blink=b;draw();dirty=false}else blink=b;
-      requestAnimationFrame(tick)}
+      // ferma (bocca chiusa, nessun battito di ciglia in corso): niente disegno a 60 fotogrammi, si ricontrolla ogni tanto
+      if(!blinkT&&target===0&&open<0.01&&!dirty){last=0;sleep=setTimeout(()=>{sleep=0;requestAnimationFrame(tick)},Math.max(16,Math.min(250,blinkAt-performance.now())))}
+      else requestAnimationFrame(tick)}
     requestAnimationFrame(tick);
-    return {mouth(v){target=Math.max(0,Math.min(1,v))},stop(){alive=false}}}
+    return {mouth(v){target=Math.max(0,Math.min(1,v));if(target>0&&sleep){clearTimeout(sleep);sleep=0;requestAnimationFrame(tick)}},stop(){alive=false}}}
   return {make};
 })();
 function initFigure(){
@@ -1832,7 +1836,7 @@ function initFigure(){
       fast=!!(r.speaking||r.listening||Date.now()-wakeT<15000);setState(r.listening?'listen':r.speaking?'talk':Date.now()-wakeT<4000?'listen':'')}}catch(e){}polling=false}
   (function loop(){poll();setTimeout(loop,fast?130:700)})();
   (function lip(){let v=0;if(env.length){const i=Math.floor((performance.now()-tl)/1000/step);v=i>=0&&i<env.length?env[i]:0;if(i>env.length+8)env=[]}
-    if(FIG)FIG.mouth(v>0.06?v:0);requestAnimationFrame(lip)})();
+    if(FIG)FIG.mouth(v>0.06?v:0);if(env.length)requestAnimationFrame(lip);else setTimeout(lip,fast?50:300)})();
   window.__riseWake=w=>{wakeT=Date.now();S.aiVoice=w==='m'?'m':'f';render();setState('listen');fast=true};
   el.onclick=()=>openApp('assistant');
   el.oncontextmenu=e=>{e.preventDefault();e.stopPropagation();S.figure=false;apply();

@@ -7,3 +7,5 @@ cups cups-client cups-bsd cups-filters cups-browsed ipp-usb printer-driver-hpcup
 ieee-data
 # Bluetooth: invio di file ai telefoni
 bluez-obexd
+# Video accelerati dalla scheda grafica (YouTube più fluido, meno processore): driver Intel recenti e plugin VA
+intel-media-va-driver gstreamer1.0-plugins-bad
