@@ -389,7 +389,7 @@ html[data-role=app] #figure,html[data-role=panel] #figure,html[data-role=popup] 
 .ai-main{position:relative;flex:1;display:flex;min-height:0}
 .ai-time{align-self:center;font-size:.78em;color:var(--ink-soft);margin-top:-4px}
 .ai-msg.user.heard{display:none}
-.ai-chat.voice .ai-msg.bot:not(.keep){display:none}
+.ai-chat.voice .ai-msg.bot:not(.keep):not(:has(.ai-dots)):not(:has(.ai-phase)){display:none}
 .ai-msg .ai-h{font-size:1.08em}.ai-msg code{background:#eef2f6;padding:0 4px;border-radius:3px}
 .ai-act{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.ai-act .btn{font-size:.88em}
 .ai-dots{display:inline-flex;gap:4px;vertical-align:middle}.ai-dots i{width:7px;height:7px;border-radius:50%;background:var(--accent);opacity:.3;animation:aidot 1.2s infinite ease-in-out}.ai-dots i:nth-child(2){animation-delay:.2s}.ai-dots i:nth-child(3){animation-delay:.4s}
@@ -2400,7 +2400,7 @@ function renderAssistant(b,opts){
         ctrl=new AbortController();
         let res;
         try{res=await fetch(`http://127.0.0.1:${ST.port}/v1/chat/completions`,{method:'POST',headers:{'Content-Type':'application/json'},signal:ctrl.signal,
-          body:JSON.stringify({messages:[{role:'system',content:AI_SYS()},...msgs.slice(-12)],...(()=>{const t=pickTools(msgs);return t.length?{tools:t}:{}})(),stream:true,return_progress:true,max_tokens:8000,cache_prompt:true,chat_template_kwargs:{enable_thinking:useThink}})});
+          body:JSON.stringify({messages:[{role:'system',content:AI_SYS()},...msgs.slice(-12)],...(()=>{const t=pickTools(msgs);return t.length?{tools:t}:{}})(),stream:true,return_progress:true,max_tokens:useThink?6000:2500,cache_prompt:true,chat_template_kwargs:{enable_thinking:useThink}})});
           if(!res.ok)throw new TypeError('http '+res.status)}
         catch(e){if(e.name!=='AbortError'&&!restarted){restarted=true;await restartEngine();out.remove();round--;continue}throw e}
         // sorveglianza: se per troppo tempo non arriva niente, si interrompe e si riprova

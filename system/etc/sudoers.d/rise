@@ -1,3 +1,3 @@
 # Rise: queste azioni di sistema si fanno senza chiedere la password all'utente del computer
 # (aggiornare Rise, installare programmi dal Negozio, Wi-Fi e Bluetooth, aggiungere stampanti)
-%sudo ALL=(root) NOPASSWD: /usr/local/bin/rise-update, /usr/bin/flatpak, /usr/sbin/rfkill, /usr/sbin/lpadmin, /usr/sbin/lpinfo
+%sudo ALL=(root) NOPASSWD: /usr/local/bin/rise-update, /usr/bin/flatpak, /usr/sbin/rfkill, /usr/sbin/lpadmin, /usr/sbin/lpinfo, /usr/bin/brightnessctl, /usr/bin/nmcli, /usr/bin/smbcontrol
