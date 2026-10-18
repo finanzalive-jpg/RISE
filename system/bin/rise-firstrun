@@ -1,5 +1,18 @@
 #!/bin/sh
 # Rise – sistemazioni dell'utente a ogni accesso al desktop (veloci, non toccano le scelte dell'utente).
+# cartelle dell'utente in italiano: se il sistema le ha registrate in inglese (Desktop, Documents…) ma esistono
+# quelle italiane di Rise (Scrivania, Documenti…), si usano quelle e ci si sposta dentro quello che c'era
+fix_dir(){ key="$1"; it="$HOME/$2"; cur="$(xdg-user-dir "$key" 2>/dev/null)"
+  [ -d "$it" ] || return 0
+  [ -n "$cur" ] && [ "$cur" != "$it" ] && [ "$cur" != "$HOME" ] || return 0
+  xdg-user-dirs-update --set "$key" "$it" 2>/dev/null || return 0
+  if [ -d "$cur" ]; then
+    for f in "$cur"/* "$cur"/.[!.]*; do [ -e "$f" ] || continue; [ -e "$it/$(basename "$f")" ] || mv "$f" "$it/"; done
+    rmdir "$cur" 2>/dev/null
+  fi
+}
+fix_dir DESKTOP Scrivania; fix_dir DOCUMENTS Documenti; fix_dir DOWNLOAD Download; fix_dir PICTURES Immagini
+fix_dir MUSIC Musica; fix_dir VIDEOS Video
 DESK="$(xdg-user-dir DESKTOP 2>/dev/null)"; [ -n "$DESK" ] && [ "$DESK" != "$HOME" ] || DESK="$HOME/Scrivania"
 mkdir -p "$DESK" "$HOME/.local/share/applications"
 INST=/usr/share/applications/rise-installer.desktop
