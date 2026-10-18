@@ -2100,7 +2100,7 @@ function renderAssistant(b,opts){
     const SITES={youtube:'https://www.youtube.com',gmail:'https://mail.google.com',google:'https://www.google.it',amazon:'https://www.amazon.it',facebook:'https://www.facebook.com',instagram:'https://www.instagram.com',whatsapp:'https://web.whatsapp.com',maps:'https://www.google.com/maps',mappe:'https://www.google.com/maps',wikipedia:'https://it.wikipedia.org',netflix:'https://www.netflix.com',spotify:'https://open.spotify.com',ebay:'https://www.ebay.it',chatgpt:'https://chatgpt.com',repubblica:'https://www.repubblica.it',corriere:'https://www.corriere.it'};
     const APPN={word:['nat','word'],documento:['nat','word'],wordcraft:['nat','word'],excel:['nat','sheet'],foglio:['nat','sheet'],gridcraft:['nat','sheet'],presentazion:['nat','deck'],powerpoint:['nat','deck'],deckcraft:['nat','deck'],browser:['nat','browser'],internet:['nat','browser'],calcolatrice:['app','calc'],impostazioni:['app','settings'],file:['app','files'],esplora:['app','files'],cartell:['app','files'],note:['app','notes'],video:['nat','player']};
     const openUrl=async url=>{const r=await SYS.call('native.open',{id:'browser',url}).catch(()=>({ok:false}));if(!r.ok&&window.openSite)window.openSite(url)};
-    let PVSKIP=false;
+    let PVSKIP=false,FOLDQ=null;
     const reply=(html,spoken,q)=>{add('bot',html);msgs.push({role:'assistant',content:spoken});speak(spoken)};
 
     // ---- preventivo con un modulo: niente attese, i conti li fa Rise
@@ -2139,7 +2139,11 @@ function renderAssistant(b,opts){
       // "Sara, crea una cartella…" / "ehi Nicola apri YouTube": il nome all'inizio non fa parte del comando
       {const nm=[aiName('f'),aiName('m'),'sara','nicola'].map(x=>String(x||'').toLowerCase().replace(/[^a-zà-ÿ ]/g,'')).filter(Boolean).join('|');
        const re=new RegExp('^(?:(?:ehi|ei|hey|ok|ciao|senti)\\s+)?(?:'+nm+')\\b[\\s,!.:]*','i');const t2=t.replace(re,'').trim();if(t2&&t2!==t){t=t2;q=q.trim().replace(re,'').trim()}}
-      if(!PVSKIP&&/preventiv/.test(t)&&!/(modific|cambi|leggi|apri|aprimi|trova|cerca|manda|invia|stampa|pdf)/.test(t)){await prevForm(t);return true}PVSKIP=false;
+      // risposta a "Come la chiamo?": la frase è il nome della cartella
+      if(FOLDQ){const base=FOLDQ;FOLDQ=null;if(t.split(/\s+/).length<=6&&!/^(no|annulla|lascia)/.test(t)){const nm=q.trim().replace(/^(?:chiamala|chiamata|il nome è|nome)\s+/i,'').replace(/[.!?]+$/,'');
+        const r=await SYS.call('auto.mkdir',{testo:base+' chiamata '+nm});if(r.ok){const n2=r.path.split('/').pop(),wh=/^(Scrivania|Desktop)$/.test(r.where)?'sul desktop':'in '+r.where;
+          reply(`${I('folder',18)} Ho creato la cartella <b>${esc(n2)}</b> ${esc(wh)}.`,'Ho creato la cartella '+n2+' '+wh+'.');openApp('files',{goto:'fs:'+r.path});return true}}}
+      if(!PVSKIP&&/preventiv/.test(t)&&!/(cartell|chiamal|chiamat|rinomin|nome|modific|cambi|leggi|apri|aprimi|trova|cerca|manda|invia|stampa|pdf|elimin|cancell|sposta)/.test(t)){await prevForm(t);return true}PVSKIP=false;
       // conferma di un'azione in sospeso (installazione, spegnimento)
       if(PENDING){if(/^(s[iì]|ok|vai|procedi|conferma|installa(lo|la)?|certo)(\s|$)/.test(t)){PENDING.yes();return true}if(/^(no|annulla|lascia stare)/.test(t)){PENDING.no();return true}}
       // conferma dell'email preparata
@@ -2219,7 +2223,7 @@ function renderAssistant(b,opts){
         $('[data-y]',box).onclick=()=>PENDING&&PENDING.yes();$('[data-n]',box).onclick=()=>PENDING&&PENDING.no();speak(mins?'Spengo tra '+mins+' minuti?':'Spengo il computer?');return true}
       // cartelle: "crea una cartella clienti sul desktop"
       if(P.file&&(m=q.trim().replace(/[?!.]+$/,'').replace(/^(?:per favore|perfavore|allora|dai|ok|senti)[\s,]+/i,'').match(/^(?:(?:mi\s+)?(?:puoi|potresti|riesci a|vorrei)\s+)?(?:crea(?:mi|re|rmi)?|crei|fammi|fai(?:mi)?|aggiungi|nuova|metti)\s+(.*\bcartell[ae]\b.*)$/i))){
-        const r=await SYS.call('auto.mkdir',{testo:m[1]});if(!r.ok){reply(esc(r.message),r.message);return true}const nm=r.path.split('/').pop(),wh=/^(Scrivania|Desktop)$/.test(r.where)?'sul desktop':'in '+r.where;
+        const r=await SYS.call('auto.mkdir',{testo:m[1]});if(!r.ok){if(/come la chiamo/i.test(r.message||''))FOLDQ=m[1];reply(esc(r.message),r.message);return true}const nm=r.path.split('/').pop(),wh=/^(Scrivania|Desktop)$/.test(r.where)?'sul desktop':'in '+r.where;
         reply(`${I('folder',18)} ${r.existed?'C’era già':'Ho creato'} la cartella <b>${esc(nm)}</b> ${esc(wh)}.`,(r.existed?'C’era già la cartella ':'Ho creato la cartella ')+nm+' '+wh+'.');openApp('files',{goto:'fs:'+r.path});return true}
       // file: "aprimi il file preventivo rossi", "apri l'ultimo pdf"
       if(P.file&&(m=t.match(/^apri(?:mi)?\s+(?:il\s+file|l'ultimo|l’ultimo|l'ultima|l’ultima|il\s+documento|il\s+preventivo|la\s+foto|il\s+pdf)\s*(.*)$/))){
