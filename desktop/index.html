@@ -2134,7 +2134,10 @@ function renderAssistant(b,opts){
         d.innerHTML=`${I('m-word',20)} Ho creato <b>${esc(r.name)}</b> (totale ${esc(r.totale||'')}) in <b>${esc(r.folder||'Documenti')}</b> e l'ho aperto.`;
         msgs.push({role:'assistant',content:'Preventivo creato: '+r.name+', totale '+(r.totale||'')});speak('Fatto, ho creato il preventivo e l’ho aperto.')}}
     async function quick(q){
-      const t=q.toLowerCase().replace(/[?!.]+$/,'').trim();let m;const P=Object.assign({siti:true,file:true,email:true},S.perm||{});
+      let t=q.toLowerCase().replace(/[?!.]+$/,'').trim();let m;const P=Object.assign({siti:true,file:true,email:true},S.perm||{});
+      // "Sara, crea una cartella…" / "ehi Nicola apri YouTube": il nome all'inizio non fa parte del comando
+      {const nm=[aiName('f'),aiName('m'),'sara','nicola'].map(x=>String(x||'').toLowerCase().replace(/[^a-zà-ÿ ]/g,'')).filter(Boolean).join('|');
+       const re=new RegExp('^(?:(?:ehi|ei|hey|ok|ciao|senti)\\s+)?(?:'+nm+')\\b[\\s,!.:]*','i');const t2=t.replace(re,'').trim();if(t2&&t2!==t){t=t2;q=q.trim().replace(re,'').trim()}}
       if(!PVSKIP&&/preventiv/.test(t)&&!/(modific|cambi|leggi|apri|aprimi|trova|cerca|manda|invia|stampa|pdf)/.test(t)){await prevForm(t);return true}PVSKIP=false;
       // conferma di un'azione in sospeso (installazione, spegnimento)
       if(PENDING){if(/^(s[iì]|ok|vai|procedi|conferma|installa(lo|la)?|certo)(\s|$)/.test(t)){PENDING.yes();return true}if(/^(no|annulla|lascia stare)/.test(t)){PENDING.no();return true}}
