@@ -970,7 +970,7 @@ def doc_create(a):
         z.writestr('word/numbering.xml', _docx_numbering())
         z.writestr('word/document.xml', _docx_xml(text))
     os.replace(tmp, path)
-    where = 'Scrivania (desktop)' if os.path.basename(folder) == 'Scrivania' else os.path.basename(folder)
+    where = 'Scrivania (desktop)' if os.path.basename(folder) in ('Scrivania', 'Desktop') else os.path.basename(folder)
     return {'ok': True, 'path': path, 'name': os.path.basename(path), 'size': os.path.getsize(path),
             'folder': where, 'missing': missing}
 
@@ -1165,7 +1165,11 @@ def wall_copy(a):
 
 
 def desk_ensure(_=None):
-    d = os.path.join(HOME, 'Scrivania')
+    try:
+        import riseauto
+        d = os.path.join(HOME, riseauto._DESK)
+    except Exception:
+        d = os.path.join(HOME, 'Scrivania')
     os.makedirs(d, exist_ok=True)
     return {'ok': True, 'path': d}
 

@@ -25,9 +25,24 @@ for _p in glob.glob('/opt/rise-py/lib/python3*/site-packages'):     # fpdf2 (lic
     if _p not in sys.path:
         sys.path.append(_p)
 
-PLACES = {'documenti': 'Documenti', 'desktop': 'Scrivania', 'scrivania': 'Scrivania', 'download': 'Download',
-          'scaricati': 'Download', 'immagini': 'Immagini', 'foto': 'Immagini', 'musica': 'Musica', 'video': 'Video',
-          'home': '', 'casa': ''}
+def _xdg(key, default):
+    """Le cartelle dell'utente come le conosce il sistema (~/.config/user-dirs.dirs), relative alla home."""
+    try:
+        for line in open(os.path.join(os.path.expanduser('~'), '.config', 'user-dirs.dirs'), errors='replace'):
+            if line.startswith('XDG_%s_DIR=' % key):
+                v = line.split('=', 1)[1].strip().strip('"').replace('$HOME', os.path.expanduser('~'))
+                rel = os.path.relpath(v, os.path.expanduser('~'))
+                if rel and not rel.startswith('..') and rel != '.':
+                    return rel
+    except OSError:
+        pass
+    return default
+
+
+_DESK = _xdg('DESKTOP', 'Scrivania')
+PLACES = {'documenti': _xdg('DOCUMENTS', 'Documenti'), 'desktop': _DESK, 'scrivania': _DESK, 'download': _xdg('DOWNLOAD', 'Download'),
+          'scaricati': _xdg('DOWNLOAD', 'Download'), 'immagini': _xdg('PICTURES', 'Immagini'), 'foto': _xdg('PICTURES', 'Immagini'),
+          'musica': _xdg('MUSIC', 'Musica'), 'video': _xdg('VIDEOS', 'Video'), 'home': '', 'casa': ''}
 KINDS = {'word': ('.docx', '.doc', '.odt', '.rtf'), 'documento': ('.docx', '.doc', '.odt', '.rtf', '.pdf', '.txt'),
          'excel': ('.xlsx', '.xls', '.ods', '.csv'), 'foglio': ('.xlsx', '.xls', '.ods', '.csv'),
          'pdf': ('.pdf',), 'presentazione': ('.pptx', '.ppt', '.odp'),
