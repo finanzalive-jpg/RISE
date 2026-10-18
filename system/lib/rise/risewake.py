@@ -22,7 +22,7 @@ from vosk import KaldiRecognizer, Model, SetLogLevel
 
 SetLogLevel(-1)
 RATE = 16000
-PREFIX = ('ehi', 'ei', 'e', 'hey', 'ciao', 'ok', 'senti')
+PREFIX = ('ehi', 'ei', 'hey', 'ok')
 
 
 def norm(s):
@@ -33,7 +33,7 @@ def norm(s):
 def main():
     model = Model(sys.argv[1])
     names = {k: norm(v) for k, v in json.loads(sys.argv[2]).items() if norm(v)}
-    phrases = sorted({'%s %s' % (p, n) for n in names.values() for p in PREFIX} | set(names.values()))
+    phrases = sorted({'%s %s' % (p, n) for n in names.values() for p in PREFIX} | set(names.values()) | {'e', 'ciao', 'senti'})
     rec = KaldiRecognizer(model, RATE, json.dumps(phrases + ['[unk]'], ensure_ascii=False))
     # si passa da PipeWire (parec), che usa il microfono scelto dal sistema; arecord diretto su ALSA
     # su molti portatili prende l'ingresso cuffie invece del microfono interno
@@ -89,11 +89,7 @@ def main():
 
 
 def heard(words, names, final=False):
-    # il nome detto da solo, come frase a sé (dopo una pausa), vale anche lui
-    if final:
-        for who, n in names.items():
-            if ' '.join(words) == n:
-                return who
+    # serve sempre "Ehi …" davanti: il nome da solo (o "e Sara" dentro un discorso) non apre il microfono
     for i, w in enumerate(words[:-1]):
         if w in PREFIX:
             for who, n in names.items():

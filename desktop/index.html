@@ -1945,7 +1945,7 @@ function renderAssistant(b,opts){
       if(VOICE){const st=await voiceReady(VOICE);if(st)SYS.call('voice.say',{voice:VOICE,text:'Ciao! Da adesso ti rispondo anche a voce.'}).catch(()=>{})}};
     async function speak(t){if(t)LASTSAID=t;if(!VOICE||!t)return;try{let r=await SYS.call('voice.say',{voice:VOICE,text:t});
       if(r&&r.need==='download'&&await voiceReady(VOICE))r=await SYS.call('voice.say',{voice:VOICE,text:t});if(r&&!r.ok&&r.message)toast(r.message,true)}catch(e){toast('La voce non risponde.',true)}}
-    let REC=false,recT=null;
+    let REC=false,recT=null,FROMWAKE=false;
     async function micDown(){if(busy)return;
       if(REC){REC=false;faceState('think');clearTimeout(recT);mic.classList.remove('rec');mic.style.boxShadow='';{const t=$('.ai-toast',b);if(t)t.hidden=true}mic.disabled=true;const note=add('tool',`${DOTS0} Sto capendo cosa hai detto…`);
         let r;try{r=await SYS.call('voice.listenStop')}catch(e){r={ok:false,message:e.message}}note.remove();mic.disabled=false;
@@ -1953,14 +1953,14 @@ function renderAssistant(b,opts){
       let r=await SYS.call('voice.listenStart').catch(e=>({ok:false,message:e.message}));
       if(r.need==='download'){if(!await voiceReady(VOICE))return;r=await SYS.call('voice.listenStart').catch(e=>({ok:false,message:e.message}))}
       if(!r.ok){toast(r.message||'Il microfono non risponde.',true);return}
-      REC=true;faceState('listen');mic.classList.add('rec');toast('Ti ascolto… parla pure: quando smetti mi fermo da solo (o clicca di nuovo il microfono).');recT=setTimeout(()=>{if(REC)micDown()},45000);
+      REC=true;faceState('listen');mic.classList.add('rec');toast('Ti ascolto… parla pure: quando smetti mi fermo da solo (o clicca di nuovo il microfono).');recT=setTimeout(()=>{if(REC)micDown()},FROMWAKE?12000:30000);FROMWAKE=false;
       const watch=setInterval(async()=>{if(!REC||!b.isConnected){clearInterval(watch);return}let st;try{st=await SYS.call('voice.status')}catch(e){return}
         if(st)mic.style.boxShadow=`0 0 0 ${2+Math.round((st.level||0)*14)}px rgba(216,58,58,.35)`;if(REC&&st&&!st.recording){clearInterval(watch);mic.style.boxShadow='';micDown()}},300)}
     mic.onclick=micDown;let FROMMIC=false,STT_SEC=null,LASTSAID='',LASTMAIL=null;
     // "Ehi Sara": risponde chi hai chiamato, e ascolta subito la domanda
     wakeFn=()=>{const g=WAKE;WAKE=null;if(!g||!b.isConnected)return;const v=g.wake==='m'?'m':'f';
       if(VOICE!==v){VOICE=v;vsel.value=v;try{localStorage.setItem('rise.ai.voice',v)}catch(e){}faceInit()}
-      if(busy&&ctrl)ctrl.abort();SYS.call('voice.stop').catch(()=>{});if(!REC)setTimeout(()=>{if(!REC&&!busy)micDown()},150)};
+      if(busy&&ctrl)ctrl.abort();SYS.call('voice.stop').catch(()=>{});if(!REC)setTimeout(()=>{if(!REC&&!busy){FROMWAKE=true;micDown()}},150)};
     if(WAKE)wakeFn();
     send.onclick=()=>{if(busy&&ctrl){ctrl.abort();return}go()};
     async function runTool(name,args){
