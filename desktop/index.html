@@ -2218,7 +2218,7 @@ function renderAssistant(b,opts){
         PENDING={yes:async()=>{PENDING=null;if(mins){await SYS.call('remind.add',{testo:'Il computer si spegne tra un minuto',iso:new Date(Date.now()+(mins-1)*60000).toISOString().slice(0,19)});setTimeout(()=>SYS.call('power',{action:'off'}),mins*60000);reply('Ok, spengo tra '+mins+' minuti. Lascia aperto l’Assistente.','Ok, spengo tra '+mins+' minuti.')}else SYS.call('power',{action:'off'})},no:()=>{PENDING=null;reply('Va bene.','Va bene.')}};
         $('[data-y]',box).onclick=()=>PENDING&&PENDING.yes();$('[data-n]',box).onclick=()=>PENDING&&PENDING.no();speak(mins?'Spengo tra '+mins+' minuti?':'Spengo il computer?');return true}
       // cartelle: "crea una cartella clienti sul desktop"
-      if(P.file&&(m=q.trim().replace(/[?!.]+$/,'').match(/^(?:crea(?:mi)?|fammi|fai|aggiungi|nuova)\s+(.*\bcartella\b.*)$/i))){
+      if(P.file&&(m=q.trim().replace(/[?!.]+$/,'').replace(/^(?:per favore|perfavore|allora|dai|ok|senti)[\s,]+/i,'').match(/^(?:(?:mi\s+)?(?:puoi|potresti|riesci a|vorrei)\s+)?(?:crea(?:mi|re|rmi)?|crei|fammi|fai(?:mi)?|aggiungi|nuova|metti)\s+(.*\bcartell[ae]\b.*)$/i))){
         const r=await SYS.call('auto.mkdir',{testo:m[1]});if(!r.ok){reply(esc(r.message),r.message);return true}const nm=r.path.split('/').pop(),wh=/^(Scrivania|Desktop)$/.test(r.where)?'sul desktop':'in '+r.where;
         reply(`${I('folder',18)} ${r.existed?'C’era già':'Ho creato'} la cartella <b>${esc(nm)}</b> ${esc(wh)}.`,(r.existed?'C’era già la cartella ':'Ho creato la cartella ')+nm+' '+wh+'.');openApp('files',{goto:'fs:'+r.path});return true}
       // file: "aprimi il file preventivo rossi", "apri l'ultimo pdf"
