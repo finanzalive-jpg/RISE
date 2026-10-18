@@ -57,6 +57,19 @@
     <keybind key="XF86MonBrightnessDown"><action name="Execute" command="sh -c 'brightnessctl -q -c backlight set 5%- || sudo -n brightnessctl -q -c backlight set 5%-'"/></keybind>
   </keyboard>
 
+  <!-- Browser, video, ufficio: si aprono a tutto schermo (si può sempre rimpicciolire) -->
+  <windowRules>
+    <windowRule identifier="org.gnome.Epiphany*"><action name="Maximize"/></windowRule>
+    <windowRule identifier="epiphany*"><action name="Maximize"/></windowRule>
+    <windowRule identifier="google-chrome*"><action name="Maximize"/></windowRule>
+    <windowRule identifier="com.google.Chrome*"><action name="Maximize"/></windowRule>
+    <windowRule identifier="chromium*"><action name="Maximize"/></windowRule>
+    <windowRule identifier="firefox*"><action name="Maximize"/></windowRule>
+    <windowRule identifier="org.mozilla.firefox*"><action name="Maximize"/></windowRule>
+    <windowRule identifier="libreoffice*"><action name="Maximize"/></windowRule>
+    <windowRule identifier="org.inkscape.Inkscape*"><action name="Maximize"/></windowRule>
+  </windowRules>
+
   <mouse>
     <default/>
     <!-- Niente menu "di sistema" sul desktop: il desktop è di Rise -->
