@@ -556,6 +556,9 @@ def diag(_=None):
             'mem': sh(['free', '-h']), 'gpu': gpu, 'cores': _physical_cores(),
             'log': rd('/tmp/rise-assistente.log', 3000),
             'upd': rd('/var/lib/rise-update/status.json', 600) + '\n' + rd('/tmp/rise-aggiornamento.log', 600),
+            'desk': sh(['sh', '-c', 'echo "sessione: $XDG_CURRENT_DESKTOP $XDG_SESSION_TYPE"; ps -eo pid,etime,args | grep -E "rise-shell|risewake|cinnamon --|nemo-desktop" | grep -v grep | cut -c1-120; '
+                        'python3 -c "import Xlib" 2>&1 | tail -1; ls /var/lib/rise/ 2>&1; tail -5 /tmp/rise-cinnamon-setup.log 2>/dev/null; '
+                        'echo "--- rise-shell:"; tail -25 /tmp/rise-shell.log 2>/dev/null; echo "--- X:"; tail -8 /tmp/rise-x.log 2>/dev/null']),
             'grub': sh(['sh', '-c', 'ls /etc/default/grub.d/ 2>&1; grep -c "enable_fbc=0" /boot/grub/grub.cfg 2>&1; ls -la /boot/grub/grub.cfg 2>&1']),
             'kernel': sh(['sh', '-c', 'journalctl -k -b --no-pager -p warning 2>/dev/null | grep -iE "i915|drm|gpu|oom|killed" | tail -15'])}
 

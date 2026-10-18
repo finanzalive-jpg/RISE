@@ -2,7 +2,7 @@
 Type=Application
 Name=Rise
 Comment=Assistente, figura sul desktop, promemoria e aggiornamenti di Rise
-Exec=rise-shell
+Exec=sh -c "exec rise-shell >/tmp/rise-shell.log 2>&1"
 Icon=rise-orb
 OnlyShowIn=X-Cinnamon;
 NoDisplay=true

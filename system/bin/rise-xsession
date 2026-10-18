@@ -26,8 +26,11 @@ for d in /sys/class/drm/card*/device; do
 done
 systemd-detect-virt -q && SAFE=1
 [ -f "$HOME/.config/rise/grafica-prudente" ] && SAFE=1
+# su X11 le pagine di Rise si disegnano sempre con la memoria condivisa (il disegno via DMA-BUF su X11
+# può lasciare trasparenti le finestre senza sfondo, come la figura)
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
 if [ "$SAFE" = 1 ]; then
-  export WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBVA_DRIVER_NAME=none
+  export LIBVA_DRIVER_NAME=none
 fi
 
 # dopo un aggiornamento fatto da una versione vecchia di Rise: tema, pulsante Start e impostazioni del desktop
