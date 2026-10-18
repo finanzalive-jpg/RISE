@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Rete: radar e ping
+Comment=Dispositivi sulla rete, ping, porte aperte, nomi
+Exec=rise-shell --open nettools
+Icon=rise-nettools
+StartupWMClass=rise-nettools
+Categories=Network;System;
+Terminal=false
+Keywords=rete;radar;ping;scanner;

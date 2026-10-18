@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Negozio
+Comment=Installa programmi: Chrome, Spotify, Zoom, giochi e migliaia di altri
+Exec=rise-shell --open store
+Icon=rise-store
+StartupWMClass=rise-store
+Categories=System;PackageManager;
+Terminal=false
+Keywords=negozio;app;programmi;installa;

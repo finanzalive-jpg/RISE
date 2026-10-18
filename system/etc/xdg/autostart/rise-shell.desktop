@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Rise
+Comment=Assistente, figura sul desktop, promemoria e aggiornamenti di Rise
+Exec=rise-shell
+Icon=rise-orb
+OnlyShowIn=X-Cinnamon;
+NoDisplay=true
+X-GNOME-Autostart-Phase=Applications

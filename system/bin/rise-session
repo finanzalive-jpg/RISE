@@ -2,6 +2,25 @@
 # Rise – avvia la sessione grafica e la fa ripartire da sola se si chiude per un errore.
 # labwc gestisce le finestre e avvia rise-shell (vedi /etc/xdg/labwc/autostart).
 LOG=/tmp/rise-session.log
+
+# --- Desktop di Rise (Cinnamon, veloce e collaudato) -----------------------------------------
+# Se non parte (due chiusure di fila nel primo minuto) si passa al desktop classico di Rise qui sotto.
+CFG="$HOME/.config/rise"
+if [ ! -f "$CFG/desktop-classico" ] && command -v cinnamon-session >/dev/null 2>&1 && command -v startx >/dev/null 2>&1; then
+  xfails=0
+  while [ "$xfails" -lt 2 ]; do
+    [ -f /tmp/rise-x.log ] && mv -f /tmp/rise-x.log /tmp/rise-x.log.prima
+    start=$(date +%s)
+    startx /usr/local/bin/rise-xsession -- :0 "vt${XDG_VTNR:-1}" -keeptty -nolisten tcp >/tmp/rise-x.log 2>&1
+    code=$?
+    echo "$(date '+%F %T') desktop chiuso (codice $code)" >> /tmp/rise-crash.log
+    if [ $(( $(date +%s) - start )) -lt 60 ]; then xfails=$((xfails + 1)); else xfails=0; fi
+    sleep 1
+  done
+  echo "$(date '+%F %T') il desktop non parte: passo al desktop classico" >> /tmp/rise-crash.log
+fi
+
+# --- Desktop classico di Rise (labwc) ---------------------------------------------------------
 export XDG_SESSION_TYPE=wayland
 export GDK_BACKEND=wayland
 # Se manca una scheda video con accelerazione (es. macchine virtuali), disegna via software.

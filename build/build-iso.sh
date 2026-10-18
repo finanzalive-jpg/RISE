@@ -49,6 +49,27 @@ Components: main restricted universe multiverse
 Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 EOF
 for m in proc sys dev dev/pts; do mount --bind "/$m" "$CH/$m"; done
+# ISO più leggera: niente manuali e documentazione, traduzioni solo in italiano (e inglese di riserva),
+# niente sfondi GNOME e varianti di icone che Rise non usa
+mkdir -p "$CH/etc/dpkg/dpkg.cfg.d"
+cat > "$CH/etc/dpkg/dpkg.cfg.d/rise-leggera" <<'EOF'
+path-exclude=/usr/share/doc/*
+path-include=/usr/share/doc/*/copyright
+path-exclude=/usr/share/man/*
+path-exclude=/usr/share/info/*
+path-exclude=/usr/share/locale/*
+path-include=/usr/share/locale/it/*
+path-include=/usr/share/locale/en/*
+path-include=/usr/share/locale/locale.alias
+path-exclude=/usr/share/help/*
+path-include=/usr/share/help/it/*
+path-include=/usr/share/help/C/*
+path-exclude=/usr/share/backgrounds/gnome/*
+path-exclude=/usr/share/icons/Papirus-Dark/*
+path-exclude=/usr/share/icons/Papirus-Light/*
+path-exclude=/usr/share/icons/ePapirus/*
+path-exclude=/usr/share/icons/ePapirus-Dark/*
+EOF
 cp -L /etc/resolv.conf "$CH/etc/resolv.conf"
 printf '#!/bin/sh\nexit 101\n' > "$CH/usr/sbin/policy-rc.d"; chmod +x "$CH/usr/sbin/policy-rc.d"
 
@@ -169,6 +190,7 @@ NPM="$WORK/npm"
 # NPM_CACHE: cartella con i pacchetti già scaricati (facoltativa, accelera le prove locali)
 "$ROOT/build/npm-libs.sh" "$NPM"
 "$ROOT/build/install-system.sh" "$CH" "$NPM/x"
+chroot "$CH" /usr/local/bin/rise-cinnamon-setup || echo "ATTENZIONE: impostazioni del desktop Cinnamon non applicate"
 # versione installata: serve agli aggiornamenti dal web per sapere se c'è qualcosa di nuovo
 BUILD_ID="$(git -C "$ROOT" log -1 --format=%ct 2>/dev/null || date +%s)"
 printf '{"build": %s, "version": "%s", "commit": "%s"}\n' "$BUILD_ID" "$VERSION" "$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo ?)" > "$CH/etc/rise-build"
@@ -180,7 +202,7 @@ chroot "$CH" flatpak remote-add --if-not-exists flathub https://dl.flathub.org/r
 echo rise > "$CH/etc/hostname"; printf '127.0.0.1 localhost\n127.0.1.1 rise\n' > "$CH/etc/hosts"
 grep -q XKB_DEFAULT_LAYOUT "$CH/etc/environment" || echo 'XKB_DEFAULT_LAYOUT=it' >> "$CH/etc/environment"
 chroot "$CH" sh -c '
-  sed -i "s/^# *it_IT.UTF-8/it_IT.UTF-8/" /etc/locale.gen; locale-gen >/dev/null
+  sed -i "s/^# *it_IT.UTF-8/it_IT.UTF-8/" /etc/locale.gen; locale-gen >/dev/null; grep -q "^LANG=" /etc/default/locale 2>/dev/null || echo LANG=it_IT.UTF-8 > /etc/default/locale
   ln -sf /usr/share/zoneinfo/Europe/Rome /etc/localtime; echo Europe/Rome > /etc/timezone
   systemctl enable greetd NetworkManager >/dev/null 2>&1
   systemctl disable getty@tty1.service >/dev/null 2>&1 || true
@@ -232,7 +254,7 @@ cp "$CH/boot/config-$KVER" "$ISO/casper/config" 2>/dev/null || true   # serve al
 chmod 644 "$ISO/casper/vmlinuz" "$ISO/casper/initrd"
 chroot "$CH" dpkg-query -W --showformat='${Package} ${Version}\n' > "$ISO/casper/filesystem.manifest"
 # Le cartelle /proc /sys /dev /run /tmp /boot devono esistere (vuote) o l'avvio si blocca
-mksquashfs "$CH" "$ISO/casper/filesystem.squashfs" -comp zstd -Xcompression-level 15 -b 1M -noappend -no-progress \
+mksquashfs "$CH" "$ISO/casper/filesystem.squashfs" -comp zstd -Xcompression-level 19 -b 1M -noappend -no-progress \
   -wildcards -e 'proc/*' 'sys/*' 'dev/*' 'run/*' 'tmp/*' 'boot/*'
 printf '%s' "$(du -sx --block-size=1 "$CH" | cut -f1)" > "$ISO/casper/filesystem.size"
 echo "Rise $VERSION - live amd64 $(date +%Y%m%d)" > "$ISO/.disk/info"

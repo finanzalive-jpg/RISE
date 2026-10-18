@@ -14,3 +14,4 @@ plymouth plymouth-label systemd-zram-generator libglib2.0-bin openssl
 samba smbclient cifs-utils wsdd avahi-daemon avahi-utils
 libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-draw libreoffice-gtk3 libreoffice-l10n-it libreoffice-help-it hyphen-it mythes-it
 inkscape xournalpp
+cinnamon-core xauth xserver-xorg-core xserver-xorg-input-libinput xinit x11-xserver-utils x11-xkb-utils dbus-x11 python3-xlib python3-pil papirus-icon-theme libnotify-bin xdg-user-dirs

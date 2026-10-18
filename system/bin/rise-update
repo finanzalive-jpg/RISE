@@ -282,6 +282,10 @@ def apply():
         if TARGET == '/':
             subprocess.run(['systemctl', 'daemon-reload'], capture_output=True)
             _boot_options()
+            # desktop Cinnamon: tema, pulsante Start, impostazioni predefinite, icone del menu
+            if os.path.exists('/usr/local/bin/rise-cinnamon-setup'):
+                _status(phase='install', message='Preparo il desktop…', pct=100)
+                subprocess.run(['/usr/local/bin/rise-cinnamon-setup'], capture_output=True, timeout=300)
         shutil.rmtree(work, ignore_errors=True)
         msg = 'Fatto! Rise %s è installato. Riavvia il computer per usarlo.' % m.get('version', '')
         if failed:

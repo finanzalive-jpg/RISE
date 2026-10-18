@@ -13,6 +13,13 @@ chmod 440 "$CH/etc/sudoers.d/rise" 2>/dev/null || true; chown root:root "$CH/etc
 cp -r "$ROOT/system/share/themes/." "$CH/usr/share/themes/"
 install -d "$CH/usr/share/plymouth/themes"
 cp -r "$ROOT/system/share/plymouth/themes/." "$CH/usr/share/plymouth/themes/"
+# desktop Cinnamon: voci del menu, icone, sfondo, impostazioni predefinite
+install -d "$CH/usr/share/applications" "$CH/usr/share/backgrounds" "$CH/usr/share/glib-2.0/schemas"
+cp -r "$ROOT/system/share/applications/." "$CH/usr/share/applications/"
+cp -r "$ROOT/system/share/backgrounds/." "$CH/usr/share/backgrounds/"
+[ -d "$ROOT/system/share/glib-2.0" ] && cp -r "$ROOT/system/share/glib-2.0/." "$CH/usr/share/glib-2.0/"
+[ -d "$ROOT/system/share/cinnamon-rise" ] && { install -d "$CH/usr/share/cinnamon-rise"; cp -r "$ROOT/system/share/cinnamon-rise/." "$CH/usr/share/cinnamon-rise/"; }
+python3 "$ROOT/build/make-icons.py" "$CH/usr/share" >/dev/null
 python3 "$ROOT/build/offline-desktop.py" "$ROOT/desktop/index.html" "$NPMX" "$CH/opt/rise"
 cp "$ROOT/LICENSE" "$CH/opt/rise/LICENZA-rise.txt"
 cp "$ROOT/NOTICE.md" "$CH/opt/rise/CREDITI.md"

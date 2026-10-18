@@ -476,6 +476,10 @@ html[data-role=panel] .tray-btn{height:min(42px,calc(100vh - 8px))}
 @media (max-height:46px){html[data-role=panel] #clock small{display:none}html[data-role=panel] #clock{font-size:.95em}}
 html[data-role=popup] #start{background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.12) 33%,transparent 40%),linear-gradient(rgba(26,70,98,.97),rgba(14,44,64,.97))}
 html[data-role=popup] #quick{background:rgba(240,248,252,.98)}
+html[data-role=figure],html[data-role=figure] body{background:transparent!important;overflow:hidden}
+html[data-role=figure] #screen>*:not(#figure),html[data-role=figure] #bar,html[data-role=figure] .pop,html[data-role=figure] #rise-loading{display:none!important}
+html[data-role=figure] #screen{background:transparent!important}
+html[data-role=figure] #figure{top:8px;right:8px}
 html[data-role=panel] body,html[data-role=popup] body,html[data-role=app] body{background:transparent}
 html[data-role=panel] #screen,html[data-role=panel] .pop,html[data-role=popup] #screen,html[data-role=popup] #bar,html[data-role=app] #bar,html[data-role=app] .pop{display:none!important}
 html[data-role=app] #wall,html[data-role=app] #icons{display:none}
@@ -675,6 +679,9 @@ const setBacklight=debounce(v=>SYS.call('bright.set',{percent:v}).catch(()=>{}),
 const QS=new URLSearchParams(location.search),ROLE=NATIVE?(QS.get('role')||'full'):'full',MW=NATIVE&&ROLE!=='full';
 const APP_ID=QS.get('app');let GOTO=null;try{GOTO=QS.get('goto')?JSON.parse(QS.get('goto')):null}catch(e){}
 document.documentElement.dataset.role=ROLE;
+const DSK=QS.get('desk')||'';if(DSK)document.documentElement.dataset.desk=DSK;
+// desktop Cinnamon: gli avvisi della figura diventano notifiche del sistema
+if(ROLE==='figure'&&window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.rise)window.__riseToast=m=>{try{window.webkit.messageHandlers.rise.postMessage({id:0,cmd:'notify',args:{text:String(m)}})}catch(e){}};
 if(MW)addEventListener('load',()=>console.log('rise-size',ROLE,innerWidth+'x'+innerHeight,'dpr',devicePixelRatio));
 let NAPPS=[],LIVE_SYS=false;  // programmi veri installati (browser, Office, lettore video)
 let SYNCING=false;
@@ -855,7 +862,7 @@ function renderTasks(){
 $('#peek').onclick=()=>{if(MW){const act=TOPS.some(x=>!x.minimized);TOPS.forEach(x=>SYS.call('top.action',{action:act?'minimize':'activate',id:x.id}));return}const vis=Object.keys(W).filter(k=>!W[k].min);if(vis.length)vis.forEach(k=>{W[k].el.hidden=true;W[k].min=true});TOP=null;renderTasks()};
 
 /* ================= Desktop ================= */
-setTimeout(()=>{renderDesk();loadDeskFiles()},0);setTimeout(()=>{if(NATIVE&&(ROLE==='desktop'||ROLE==='full')){const chk=async()=>{if(S.updAuto===false)return;let last=0;try{last=+localStorage.getItem('rise.updCheck')||0}catch(e){}
+setTimeout(()=>{renderDesk();loadDeskFiles()},0);setTimeout(()=>{if(NATIVE&&(ROLE==='desktop'||ROLE==='full'||ROLE==='figure')){const chk=async()=>{if(S.updAuto===false)return;let last=0;try{last=+localStorage.getItem('rise.updCheck')||0}catch(e){}
   if(Date.now()-last<20*3600*1000)return;try{localStorage.setItem('rise.updCheck',String(Date.now()))}catch(e){}
   const r=await SYS.call('update.check',{force:true}).catch(()=>null);if(r&&r.available&&window.__riseToast)window.__riseToast('C’è una versione nuova di Rise: Impostazioni → Aggiornamenti.')};
   setTimeout(chk,60000);setInterval(chk,3600*1000)}},0);setTimeout(()=>{if(NATIVE&&ROLE!=='app')SYS.call('sys.live').then(r=>{IS_LIVE=!!(r&&r.live);if(IS_LIVE)renderDesk()}).catch(()=>{})},0);setTimeout(()=>{initFigure();if(NATIVE&&(ROLE==='desktop'||ROLE==='full'))SYS.call('voice.wake',{enabled:S.wake!==false,names:S.aiNames||{}}).catch(()=>{})},0);setInterval(()=>{if(ROLE!=='app'&&document.visibilityState==='visible')loadDeskFiles()},8000);
@@ -1463,7 +1470,7 @@ window.setWallPath=async p=>{const r=await SYS.call('wall.copy',{path:p});if(r&&
 
 /* ================= Icone sul desktop ================= */
 let DESKFILES=[];
-function renderDesk(){const el=$('#icons');if(!el||ROLE==='app'||ROLE==='panel'||ROLE==='popup')return;
+function renderDesk(){const el=$('#icons');if(!el||ROLE==='app'||ROLE==='panel'||ROLE==='popup'||ROLE==='figure')return;
   const pins=(S.pins||[]).map(id=>{if(APPS[id])return {ic:I(APPS[id].ic,48),l:APPS[id].name,f:()=>openApp(id)};const n=NAPPS.find(x=>x.id===id);
       if(n)return {ic:n.img?`<img class="icon" src="${esc(n.img.startsWith('/')?'file://'+n.img:n.img)}" width="48" height="48" alt="">`:I(NICON[n.id]||'computer',48),l:n.name,f:()=>SYS.call('native.open',{id})};return null}).filter(Boolean);
   const files=DESKFILES.map(f=>({ic:f.dir?I('folder',48):fileIcon(f.name,48),l:f.name,f:()=>f.dir?openApp('files',{goto:'fs:'+HOMEP+'/Scrivania/'+f.name}):deskOpen(HOMEP+'/Scrivania/'+f.name,f)}));
@@ -1473,7 +1480,7 @@ function renderDesk(){const el=$('#icons');if(!el||ROLE==='app'||ROLE==='panel'|
 let HOMEP='/home/rise';
 function deskOpen(path,f){const vw=()=>openApp('viewer',{goto:{native:true,path,name:f.name,size:f.size,lastModified:f.mtime}});
   if(/\.(docx?|odt|rtf|xlsx?|ods|csv|pptx?|odp|mp4|mkv|avi|mov|webm|m4v|mp3|flac|ogg|wav|m4a|html?)$/i.test(path))SYS.call('open.with',{path}).then(r=>{if(!r||!r.ok)vw()}).catch(vw);else vw()}
-async function loadDeskFiles(){if(!NATIVE)return;try{const e=await SYS.call('desk.ensure');HOMEP=e.path.replace(/\/Scrivania$/,'');const r=await SYS.call('fs.list',{path:e.path});
+async function loadDeskFiles(){if(!NATIVE||ROLE==='figure')return;try{const e=await SYS.call('desk.ensure');HOMEP=e.path.replace(/\/Scrivania$/,'');const r=await SYS.call('fs.list',{path:e.path});
   DESKFILES=r.ok?[...r.dirs.map(d=>Object.assign(d,{dir:true})),...r.files]:[];renderDesk()}catch(e){}}
 function deskMenu(x,y){let m=$('#desk-menu');if(m)m.remove();m=document.createElement('div');m.id='desk-menu';m.className='ctx';m.style.left=x+'px';m.style.top=y+'px';
   m.innerHTML=`<button data-k="wall">Cambia sfondo…</button><button data-k="photo">Usa una tua foto come sfondo…</button><hr><button data-k="store">Negozio: installa programmi</button><button data-k="folder">Apri la cartella Scrivania</button><button data-k="reload">Aggiorna</button>`;
@@ -1509,8 +1516,9 @@ const KBD_NAMES={it:'Italiana',us:'Inglese (USA)',gb:'Inglese (Regno Unito)',de:
 addEventListener('pointerup',()=>{DRAGGING=false},true);addEventListener('pointercancel',()=>{DRAGGING=false},true);
 function refreshSettings(sec,soft){if(setRefresh)setRefresh(sec,soft)}
 function renderSettings(b,opts){
-  b.innerHTML=`<div class="set"><nav class="set-nav">${SECTIONS.map(s=>`<button data-s="${s.id}" title="${s.label}">${I(s.ic,26)}<span>${s.label}</span></button>`).join('')}</nav><div class="set-main"></div></div>`;
-  const main=$('.set-main',b);let cur='schermo';
+  const SECS=DSK==='cinnamon'?SECTIONS.filter(x=>!['schermo','rete','suono','aspetto'].includes(x.id)):SECTIONS;
+  b.innerHTML=`<div class="set"><nav class="set-nav">${SECS.map(s=>`<button data-s="${s.id}" title="${s.label}">${I(s.ic,26)}<span>${s.label}</span></button>`).join('')}</nav><div class="set-main"></div></div>`;
+  const main=$('.set-main',b);let cur=DSK==='cinnamon'?'assistente':'schermo';
   const row=(id,title,desc,ctl,extra='')=>`<div class="row" data-id="${id}"><div class="txt"><b>${title}</b><small>${desc}</small>${extra}</div><div class="ctl">${ctl}</div></div>`;
   const sw=(k,label)=>`<button class="switch" role="switch" aria-checked="${S[k]}" aria-label="${label}" data-k="${k}"></button>`;
   function show(sec,hl,keep){
@@ -1589,7 +1597,8 @@ function renderSettings(b,opts){
         `<div class="drop-name"><label for="s-alias">Nome con cui ti vedono</label><input id="s-alias" value="" placeholder="Rise di casa"></div>`);
       h+=`</div><div class="st-label" style="padding:18px 2px 0" data-id="shares">Cartelle condivise in rete</div><div class="hw" id="sh-list"><p class="note">${NATIVE?'Carico…':'Disponibile sul PC.'}</p></div><p class="note">Per condividere una cartella aprila in Esplora file e premi “Condividi”.</p><div>`;
     }
-    if(sec==='sistema')h+=row('kbd','Tastiera','La disposizione dei tasti del tuo computer. Se premendo un tasto esce un simbolo diverso da quello disegnato, cambiala qui.',`<select id="s-kbd" aria-label="Tastiera">${Object.entries(KBD_NAMES).map(([k,v])=>`<option value="${k}"${(S.kbd||'it')===k?' selected':''}>${v}</option>`).join('')}</select>`);
+    if(sec==='sistema'&&DSK==='cinnamon')h+=row('cin','Schermo, Wi‑Fi, suono, aspetto','Le impostazioni del computer (luminosità, rete, volume, tema, sfondo, tastiera) sono nelle Impostazioni di sistema.',`<button class="btn" data-cin>Apri Impostazioni di sistema</button>`);
+    if(sec==='sistema'&&DSK!=='cinnamon')h+=row('kbd','Tastiera','La disposizione dei tasti del tuo computer. Se premendo un tasto esce un simbolo diverso da quello disegnato, cambiala qui.',`<select id="s-kbd" aria-label="Tastiera">${Object.entries(KBD_NAMES).map(([k,v])=>`<option value="${k}"${(S.kbd||'it')===k?' selected':''}>${v}</option>`).join('')}</select>`);
     if(sec==='stampanti')h+=`</div><div class="mbox" id="prn-box" data-id="printers"><p class="note">${NATIVE?'Cerco le stampanti…':'Disponibile sul PC.'}</p></div><div>`;
     if(sec==='aggiornamenti')h+=`</div><div class="mbox" id="upd-box" data-id="upd"><p class="note">${NATIVE?'Controllo se c’è una versione nuova…':'Disponibile sul PC.'}</p></div>
       <div class="row" data-id="upd-auto"><div class="txt"><b>Controlla da solo</b><small>Una volta al giorno Rise guarda se c’è una versione nuova e te lo dice. Non installa niente senza il tuo “Aggiorna”.</small></div><div class="ctl"><button class="switch" role="switch" aria-checked="${S.updAuto!==false}" aria-label="Controlla da solo" data-updauto></button></div></div><div>`;
@@ -1691,6 +1700,7 @@ function renderSettings(b,opts){
     const on0=(sel,ev,fn)=>{const e=$(sel,main);if(e)e.addEventListener(ev,fn)};
     on0('#s-radio','click',()=>{const on=!LIVE.net.wifiOn;LIVE.net.wifiOn=on;if(!on)LIVE.nets=null;show(cur);SYS.call('net.radio',{on}).finally(()=>setTimeout(()=>netRefresh(on),2500))});
     on0('#s-rescan','click',()=>netRefresh(true));
+    {const cb=$('[data-cin]',main);if(cb)cb.onclick=()=>SYS.call('cinnamon.settings',{}).catch(()=>{})}
     $$('.switch[data-k]',main).forEach(x=>x.onclick=()=>{S[x.dataset.k]=!S[x.dataset.k];apply();show(cur,x.dataset.k)});
     const on=(sel,ev,fn)=>{const e=$(sel,main);if(e)e.addEventListener(ev,fn)};
     on('#s-bright','pointerdown',()=>{DRAGGING=true});on('#s-vol','pointerdown',()=>{DRAGGING=true});
@@ -1739,8 +1749,11 @@ function renderSettings(b,opts){
 
     if(soft&&(cur==='sistema'||cur==='condivisione'))return; // pagine con dati letti una volta: niente ridisegni automatici
     if(soft&&(($('#diag',main)&&$('#diag',main).children.length)||$('.pw',main)||DRAGGING||(main.contains(document.activeElement)&&['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName))))return;show(cur,null,soft)};
-  const goto=(id)=>{const s=SETS.find(x=>x.id===id);if(s)show(s.sec,id)};
-  if(opts&&opts.goto)goto(opts.goto);else show('schermo');
+  const CINP={schermo:'display',rete:'network',suono:'sound',aspetto:'themes'};
+  const goto=(id)=>{const s=SETS.find(x=>x.id===id)||SECTIONS.find(x=>x.id===id)&&{sec:id};if(!s)return;
+    // desktop Cinnamon: schermo, rete, suono e aspetto sono nelle impostazioni del sistema
+    if(DSK==='cinnamon'&&CINP[s.sec]){SYS.call('cinnamon.settings',{panel:CINP[s.sec]}).catch(()=>{});return}show(s.sec,id)};
+  if(opts&&opts.goto)goto(opts.goto);else show(cur);
   return goto;
 }
 
@@ -1822,11 +1835,12 @@ const RiseFigure=(function(){
   return {make};
 })();
 function initFigure(){
-  if(!(ROLE==='desktop'||ROLE==='full'))return;
+  if(!(ROLE==='desktop'||ROLE==='full'||ROLE==='figure'))return;
   const el=document.createElement('div');el.id='figure';el.innerHTML='<canvas></canvas>';$('#screen').appendChild(el);
   let FIG=null,who='',seq=-1,env=[],step=.04,tl=0,state='',polling=false,fast=false,wakeT=0;
   const persona=()=>(S.aiVoice==='m'?'nicola':'sara');
-  function render(){el.hidden=S.figure===false;const w=persona();if(w!==who){if(FIG)FIG.stop();const cv=document.createElement('canvas');$('canvas',el).replaceWith(cv);FIG=RiseFigure.make(cv,w);who=w}
+  let figVis=null;
+  function render(){el.hidden=S.figure===false;if(ROLE==='figure'&&figVis!==!el.hidden){figVis=!el.hidden;SYS.call('figure.visible',{on:figVis}).catch(()=>{})}const w=persona();if(w!==who){if(FIG)FIG.stop();const cv=document.createElement('canvas');$('canvas',el).replaceWith(cv);FIG=RiseFigure.make(cv,w);who=w}
     const v=w==='nicola'?'m':'f';el.title=`${aiName(v)} · dì «Ehi ${aiName(v)}» oppure clicca per scrivermi`}
   window.renderFigure=render;render();
   const setState=st=>{if(st===state)return;state=st;el.classList.remove('listen','talk');if(st)el.classList.add(st)};
@@ -1834,9 +1848,11 @@ function initFigure(){
     if(r){if(r.voice&&(r.voice==='m'?'nicola':'sara')!==who&&r.speaking){S.aiVoice=r.voice;render()}
       if(r.speaking){if(r.seq!==seq){seq=r.seq;env=r.env||[];step=r.step||.02;tl=performance.now()-r.elapsed*1000}}else env=[];
       fast=!!(r.speaking||r.listening||Date.now()-wakeT<15000);setState(r.listening?'listen':r.speaking?'talk':Date.now()-wakeT<4000?'listen':'')}}catch(e){}polling=false}
-  (function loop(){poll();setTimeout(loop,fast?130:700)})();
+  (function loop(){poll();setTimeout(loop,fast?130:1500)})();
   (function lip(){let v=0;if(env.length){const i=Math.floor((performance.now()-tl)/1000/step);v=i>=0&&i<env.length?env[i]:0;if(i>env.length+8)env=[]}
-    if(FIG)FIG.mouth(v>0.06?v:0);if(env.length)requestAnimationFrame(lip);else setTimeout(lip,fast?50:300)})();
+    if(FIG)FIG.mouth(v>0.06?v:0);if(env.length)requestAnimationFrame(lip);else setTimeout(lip,fast?50:500)})();
+  // l'Assistente sta per parlare: la figura controlla subito (e spesso) la voce
+  window.__riseFast=()=>{wakeT=Date.now()-11000;fast=true;poll()};
   window.__riseWake=w=>{wakeT=Date.now();S.aiVoice=w==='m'?'m':'f';render();setState('listen');fast=true};
   el.onclick=()=>openApp('assistant');
   el.oncontextmenu=e=>{e.preventDefault();e.stopPropagation();S.figure=false;apply();

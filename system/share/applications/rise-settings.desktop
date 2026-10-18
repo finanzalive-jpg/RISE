@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Impostazioni di Rise
+Comment=Assistente, aggiornamenti, stampanti e altre impostazioni di Rise
+Exec=rise-shell --open settings
+Icon=rise-settings
+StartupWMClass=rise-settings
+Categories=Settings;
+Terminal=false
+Keywords=impostazioni;aggiornamenti;rise;

@@ -1,0 +1,31 @@
+#!/bin/sh
+# Rise – sistemazioni dell'utente a ogni accesso al desktop (veloci, non toccano le scelte dell'utente).
+DESK="$(xdg-user-dir DESKTOP 2>/dev/null)"; [ -n "$DESK" ] && [ "$DESK" != "$HOME" ] || DESK="$HOME/Scrivania"
+mkdir -p "$DESK" "$HOME/.local/share/applications"
+INST=/usr/share/applications/rise-installer.desktop
+if [ -d /cdrom/casper ] || grep -q 'boot=casper' /proc/cmdline 2>/dev/null; then
+  # dalla chiavetta: "Installa Rise" sul desktop e nel menu
+  if [ -f "$INST" ]; then
+    sed 's/^NoDisplay=true/NoDisplay=false/' "$INST" > "$HOME/.local/share/applications/rise-installer.desktop"
+    cp "$HOME/.local/share/applications/rise-installer.desktop" "$DESK/Installa Rise.desktop"
+    chmod +x "$DESK/Installa Rise.desktop"
+    gio set "$DESK/Installa Rise.desktop" metadata::trusted true 2>/dev/null
+  fi
+else
+  rm -f "$HOME/.local/share/applications/rise-installer.desktop" "$DESK/Installa Rise.desktop"
+fi
+# tasto Windows + A: chiama l'Assistente (come dire "Ehi Sara") — una volta sola, poi decide l'utente
+if [ ! -f "$HOME/.config/rise/scorciatoie-fatte" ] && command -v gsettings >/dev/null; then
+  K=org.cinnamon.desktop.keybindings
+  cur="$(gsettings get $K custom-list 2>/dev/null)"
+  case "$cur" in *rise-assistente*) ;; *)
+    new="$(echo "$cur" | sed "s/@as \[\]/[]/; s/\]$/, 'rise-assistente']/; s/\[, /[/")"
+    gsettings set $K custom-list "$new" 2>/dev/null
+    P=/org/cinnamon/desktop/keybindings/custom-keybindings/rise-assistente/
+    gsettings set $K.custom-keybinding:$P name 'Assistente di Rise' 2>/dev/null
+    gsettings set $K.custom-keybinding:$P command 'rise-shell --wake' 2>/dev/null
+    gsettings set $K.custom-keybinding:$P binding "['<Super>a']" 2>/dev/null ;;
+  esac
+  mkdir -p "$HOME/.config/rise"; : > "$HOME/.config/rise/scorciatoie-fatte"
+fi
+exit 0
