@@ -60,6 +60,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete preview --yes --cleanup-tag || true
-          gh release create preview out/*.iso out/*.sha256 --prerelease \
+          gh release create preview out/*.iso out/*.sha256 out/*.packages.txt --prerelease \
             --title "Rise preview (${{ steps.v.outputs.version }})" \
             --notes "Automatic build of the latest code on main. For testing: it may contain bugs."
