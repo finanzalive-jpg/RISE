@@ -366,6 +366,7 @@ html[data-role=app] #figure,html[data-role=panel] #figure,html[data-role=popup] 
 .ai-wake-st{display:block;margin-top:4px;color:var(--ink-soft);font-size:.85em;max-width:340px}
 .ai-gpu{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:5px}
 #upd-box .ok{color:#1d7a3a}#upd-box .err{color:#b3261e}#upd-box .btn{margin:4px 6px 0 0}#upd-box ul{margin:6px 0 6px 18px;font-size:.92em}
+.pv{display:grid;gap:7px;min-width:min(520px,80vw)}.pv label{display:grid;gap:2px;font-size:.88em}.pv input,.pv textarea,.pv select{font:inherit;padding:5px 7px;border:1px solid var(--line);border-radius:5px;background:#fff}.pv-t{width:100%;border-collapse:collapse}.pv-t th{font-size:.8em;text-align:left;color:var(--ink-soft)}.pv-t td{padding:2px}.pv-t td:first-child input{width:100%;box-sizing:border-box}.pv-t td:nth-child(2) input{width:52px}.pv-t td:nth-child(3) input{width:90px}.pv-row{display:flex;gap:14px;flex-wrap:wrap}.pv-row label{display:flex;align-items:center;gap:6px}.pv-tot{font-size:.92em}.pv-act{display:flex;gap:8px;flex-wrap:wrap}
 .inst{height:100%;overflow:auto;background:var(--paper,#f6f9fc);color:var(--ink)}.inst-body{padding:18px 24px}.inst h2{margin:0 0 10px}.ihero{display:flex;gap:16px;align-items:center;margin-bottom:10px}
 .iok{background:#eaf7ee;border:1px solid #9fd3ad;border-radius:8px;padding:10px 14px;margin:12px 0}.ilist{list-style:none;padding:0;margin:10px 0;display:grid;gap:6px}.iwarn{background:#fff6e5;border:1px solid #f0c36d;border-radius:8px;padding:10px 14px;margin:12px 0}.iwarn p,.iwarn ol{margin:6px 0}.iwarn li{margin:3px 0}
 .iact{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}.idisk{margin:10px 0}.dbar{display:flex;height:34px;border-radius:6px;overflow:hidden;margin:6px 0;border:1px solid var(--line)}
@@ -2076,9 +2077,43 @@ function renderAssistant(b,opts){
     const SITES={youtube:'https://www.youtube.com',gmail:'https://mail.google.com',google:'https://www.google.it',amazon:'https://www.amazon.it',facebook:'https://www.facebook.com',instagram:'https://www.instagram.com',whatsapp:'https://web.whatsapp.com',maps:'https://www.google.com/maps',mappe:'https://www.google.com/maps',wikipedia:'https://it.wikipedia.org',netflix:'https://www.netflix.com',spotify:'https://open.spotify.com',ebay:'https://www.ebay.it',chatgpt:'https://chatgpt.com',repubblica:'https://www.repubblica.it',corriere:'https://www.corriere.it'};
     const APPN={word:['nat','word'],documento:['nat','word'],wordcraft:['nat','word'],excel:['nat','sheet'],foglio:['nat','sheet'],gridcraft:['nat','sheet'],presentazion:['nat','deck'],powerpoint:['nat','deck'],deckcraft:['nat','deck'],browser:['nat','browser'],internet:['nat','browser'],calcolatrice:['app','calc'],impostazioni:['app','settings'],file:['app','files'],esplora:['app','files'],cartell:['app','files'],note:['app','notes'],video:['nat','player']};
     const openUrl=async url=>{const r=await SYS.call('native.open',{id:'browser',url}).catch(()=>({ok:false}));if(!r.ok&&window.openSite)window.openSite(url)};
+    let PVSKIP=false;
     const reply=(html,spoken,q)=>{add('bot',html);msgs.push({role:'assistant',content:spoken});speak(spoken)};
+
+    // ---- preventivo con un modulo: niente attese, i conti li fa Rise
+    async function prevForm(t){const c=await SYS.call('doc.preventivoConf').catch(()=>({}));
+      const cart=(t.match(/(?:nella|dentro la|in|sulla) cartella\s+([\w\- ]+?)(?:\s*$|\s*,|\s+(?:per|con)\b)/)||[])[1]||'';
+      const ogg=(t.match(/preventiv\w*\s+(?:per|di|relativo a)\s+(.+?)(?:\s+(?:nella|dentro|in) cartella.*)?$/)||[])[1]||'';
+      const d=add('bot',`<div class="pv"><b>${I('m-word',18)} Nuovo preventivo n. ${esc(c.numero||'')}</b>
+        <label>La tua ditta<textarea rows="2" data-pv="azienda" placeholder="Nome ditta, indirizzo, P. IVA, telefono">${esc(c.azienda||'')}</textarea></label>
+        <label>Cliente<input data-pv="cliente" placeholder="Nome e indirizzo del cliente"></label>
+        <label>Oggetto<input data-pv="oggetto" value="${esc(ogg)}" placeholder="Es. Installazione condizionatori"></label>
+        <table class="pv-t"><thead><tr><th>Descrizione</th><th>Q.tà</th><th>Prezzo €</th><th></th></tr></thead><tbody></tbody></table>
+        <button class="btn" data-pvadd>+ Aggiungi riga</button>
+        <div class="pv-row"><label>IVA <select data-pv="iva"><option>22</option><option>10</option><option>4</option><option>0</option></select> %</label>
+        <label>Cartella <input data-pv="cartella" value="${esc(cart)}" placeholder="Documenti"></label></div>
+        <div class="pv-tot"></div><p class="err" data-pverr></p>
+        <div class="pv-act"><button class="btn primary" data-pvgo>Crea preventivo</button> <button class="btn" data-pvai>Fallo scrivere all’Assistente</button></div></div>`);
+      d.classList.add('keep');const tb=$('tbody',d),num=x=>parseFloat(String(x||'').replace(/\./g,'').replace(',','.'))||0,eur=x=>x.toLocaleString('it-IT',{style:'currency',currency:'EUR'});
+      const tot=()=>{let s=0;$$('tr',tb).forEach(r=>{s+=num($('[data-q]',r).value||1)*num($('[data-p]',r).value)});const iv=+$('[data-pv=iva]',d).value;
+        $('.pv-tot',d).innerHTML=`Imponibile <b>${eur(s)}</b> · IVA ${iv}% <b>${eur(s*iv/100)}</b> · Totale <b>${eur(s*(1+iv/100))}</b>`};
+      const row=()=>{const r=document.createElement('tr');r.innerHTML='<td><input data-d placeholder="Es. Condizionatore 12000 BTU"></td><td><input data-q value="1" inputmode="decimal"></td><td><input data-p inputmode="decimal" placeholder="0,00"></td><td><button class="btn" data-x title="Togli">✕</button></td>';
+        tb.appendChild(r);$('[data-x]',r).onclick=()=>{r.remove();tot()};$$('input',r).forEach(i=>i.oninput=tot);return r};
+      row();$('[data-pvadd]',d).onclick=()=>{$('[data-d]',row()).focus()};$('[data-pv=iva]',d).onchange=tot;tot();
+      $('[data-pv=cliente]',d).focus();log.scrollTop=log.scrollHeight;
+      $('[data-pvai]',d).onclick=()=>{d.remove();ta.value=q0;PVSKIP=true;go()};const q0=t;
+      $('[data-pvgo]',d).onclick=async()=>{const v=k=>$(`[data-pv=${k}]`,d).value.trim(),err=$('[data-pverr]',d);
+        const voci=$$('tr',tb).map(r=>({descrizione:$('[data-d]',r).value.trim(),quantita:num($('[data-q]',r).value||1),prezzo:num($('[data-p]',r).value)})).filter(x=>x.descrizione);
+        if(!v('cliente')){err.textContent='Scrivi il cliente.';return}if(!voci.length){err.textContent='Aggiungi almeno una riga con la descrizione.';return}
+        const b=$('[data-pvgo]',d);b.disabled=true;b.textContent='Creo…';
+        const r=await SYS.call('doc.preventivo',{azienda:v('azienda'),cliente:v('cliente'),oggetto:v('oggetto'),iva:+v('iva'),cartella:v('cartella')||undefined,voci}).catch(e=>({ok:false}));
+        if(!r.ok){b.disabled=false;b.textContent='Crea preventivo';err.textContent='Non sono riuscito a crearlo.';return}
+        LASTDOC=r.path;SYS.call('open.with',{path:r.path}).catch(()=>{});
+        d.innerHTML=`${I('m-word',20)} Ho creato <b>${esc(r.name)}</b> (totale ${esc(r.totale||'')}) in <b>${esc(r.folder||'Documenti')}</b> e l'ho aperto.`;
+        msgs.push({role:'assistant',content:'Preventivo creato: '+r.name+', totale '+(r.totale||'')});speak('Fatto, ho creato il preventivo e l’ho aperto.')}}
     async function quick(q){
       const t=q.toLowerCase().replace(/[?!.]+$/,'').trim();let m;const P=Object.assign({siti:true,file:true,email:true},S.perm||{});
+      if(!PVSKIP&&/preventiv/.test(t)&&!/(modific|cambi|leggi|apri|aprimi|trova|cerca|manda|invia|stampa|pdf)/.test(t)){await prevForm(t);return true}PVSKIP=false;
       // conferma di un'azione in sospeso (installazione, spegnimento)
       if(PENDING){if(/^(s[iì]|ok|vai|procedi|conferma|installa(lo|la)?|certo)(\s|$)/.test(t)){PENDING.yes();return true}if(/^(no|annulla|lascia stare)/.test(t)){PENDING.no();return true}}
       // conferma dell'email preparata

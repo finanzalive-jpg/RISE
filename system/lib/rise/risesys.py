@@ -999,6 +999,16 @@ def _eur(x):
     return s + ' €'
 
 
+def doc_preventivo_conf(_=None):
+    """Dati già noti per il modulo del preventivo: la tua ditta e il prossimo numero."""
+    try:
+        conf = json.load(open(os.path.join(HOME, '.config', 'rise', 'preventivi.json')))
+    except (OSError, ValueError):
+        conf = {}
+    year = time.strftime('%Y')
+    return {'ok': True, 'azienda': conf.get('azienda', ''), 'numero': '%d/%s' % (conf.get('ultimo', {}).get(year, 0) + 1, year)}
+
+
 def doc_preventivo(a):
     """Preventivo impaginato: i conti (righe, imponibile, IVA, totale) li fa Rise, non l'Assistente."""
     conf_p = os.path.join(HOME, '.config', 'rise', 'preventivi.json')
@@ -1091,7 +1101,7 @@ def sys_bootwhy(_):
     return {'total': total.splitlines()[0] if total else '', 'slow': items,
             'chain': [l.strip() for l in chain.splitlines()[2:14]]}
 
-CMDS = {'sys.bootwhy': sys_bootwhy, 'doc.create': doc_create, 'doc.preventivo': doc_preventivo, 'kbd.set': kbd_set, 'pkg.install': pkg_install, 'sys.live': is_live, 'net.status': net_status, 'net.scan': net_scan, 'net.connect': net_connect, 'net.radio': net_radio,
+CMDS = {'sys.bootwhy': sys_bootwhy, 'doc.create': doc_create, 'doc.preventivo': doc_preventivo, 'doc.preventivoConf': doc_preventivo_conf, 'kbd.set': kbd_set, 'pkg.install': pkg_install, 'sys.live': is_live, 'net.status': net_status, 'net.scan': net_scan, 'net.connect': net_connect, 'net.radio': net_radio,
         'net.diag': net_diag, 'audio.get': audio_get, 'audio.set': audio_set, 'bright.get': bright_get,
         'bright.set': bright_set, 'power': power, 'sys.info': sys_info, 'fs.roots': fs_roots,
         'fs.mount': fs_mount, 'fs.list': fs_list, 'fs.read': fs_read,
