@@ -1921,8 +1921,9 @@ function renderAssistant(b,opts){
     const vsel=$('[data-voice]',body),mic=$('[data-mic]',body);let VOICE='f';try{const v=localStorage.getItem('rise.ai.voice');if(v!==null)VOICE=v}catch(e){}
     fetch(`http://127.0.0.1:${ST.port}/v1/chat/completions`,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({messages:[{role:'system',content:AI_SYS()},{role:'user',content:'ciao'}],max_tokens:1,cache_prompt:true,chat_template_kwargs:{enable_thinking:false}})}).catch(()=>{});
-    const thk=$('[data-think]',body);let THINK=false;try{const v=localStorage.getItem('rise.ai.think2');if(v!==null)THINK=v==='1'}catch(e){}
-    thk.checked=THINK;thk.onchange=()=>{THINK=thk.checked;try{localStorage.setItem('rise.ai.think2',THINK?'1':'0')}catch(e){}};
+    const thk=$('[data-think]',body);let THINK=false;try{localStorage.removeItem('rise.ai.think2')}catch(e){}
+    // "Pensa a fondo" vale solo per la conversazione in corso: ogni volta che riapri l'Assistente riparte spento (risposte rapide)
+    thk.checked=THINK;thk.onchange=()=>{THINK=thk.checked};
     vsel.value=VOICE;if(VOICE)SYS.call('voice.warm').catch(()=>{});
     // ---- voce scelta: la sa anche la figura sul desktop; con la voce accesa le risposte brevi si sentono soltanto
     const chatEl=$('.ai-chat',body);let FST='idle';
