@@ -8,8 +8,8 @@ s = open(os.path.join(ROOT, 'desktop/index.html'), encoding='utf-8').read()
 i = s.index('const ICO={')
 j = s.index('};', i)
 ico = json.loads(s[i + 10:j + 1])
-APPS = {'assistant': 'assistant', 'store': 'store', 'installer': 'install', 'nettools': 'radar', 'settings': 'settings',
-        'viewer': 'viewer', 'notes': 'notes', 'calc': 'calc', 'welcome': 'orb', 'figure': 'assistant'}
+APPS = {'store': 'store', 'installer': 'install', 'nettools': 'radar', 'settings': 'settings',
+        'viewer': 'viewer', 'notes': 'notes', 'calc': 'calc', 'welcome': 'orb', 'strumenti': 'strumenti'}
 def svg(name):
     own = os.path.join(ROOT, 'build/icons', name + '.svg')
     if os.path.exists(own):

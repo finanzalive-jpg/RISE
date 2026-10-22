@@ -7,7 +7,7 @@ pipewire pipewire-pulse pipewire-alsa pulseaudio-utils wireplumber dbus-user-ses
 libgl1-mesa-dri mesa-vulkan-drivers libegl-mesa0
 fonts-noto-core fonts-dejavu-core fonts-noto-color-emoji fonts-liberation fonts-croscore fonts-noto-mono adwaita-icon-theme
 brightnessctl ubuntu-drivers-common pciutils usbutils
-iputils-ping iproute2 systemd-timesyncd llama.cpp-tools libggml0-backend-vulkan whisper.cpp alsa-utils python3-venv fdisk exfatprogs flatpak poppler-utils bluez alsa-ucm-conf firmware-sof-signed file pci.ids usb.ids
+iputils-ping iproute2 systemd-timesyncd alsa-utils fdisk exfatprogs flatpak poppler-utils bluez alsa-ucm-conf firmware-sof-signed file pci.ids usb.ids
 labwc libgtk4-layer-shell0 gir1.2-gtk4layershell-1.0 python3-pywayland wlrctl grim
 epiphany-browser mpv plocate
 plymouth plymouth-label systemd-zram-generator libglib2.0-bin openssl
@@ -15,3 +15,4 @@ samba smbclient cifs-utils wsdd avahi-daemon avahi-utils
 libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-draw libreoffice-gtk3 libreoffice-l10n-it libreoffice-help-it hyphen-it mythes-it
 inkscape xournalpp
 cinnamon-core xauth xserver-xorg-core xserver-xorg-input-libinput xinit x11-xserver-utils x11-xkb-utils dbus-x11 python3-xlib python3-pil papirus-icon-theme libnotify-bin xdg-user-dirs
+ntfs-3g gdisk parted testdisk gddrescue smartmontools nvme-cli e2fsprogs dosfstools hdparm nwipe dislocker cryptsetup-bin chntpw clamav clamav-freshclam os-prober inxi dmidecode hwinfo lm-sensors stress-ng rsync util-linux coreutils

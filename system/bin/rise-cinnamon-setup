@@ -8,7 +8,7 @@ import subprocess
 A = '/usr/share/cinnamon/applets'
 CHANGES = {
     'menu@cinnamon.org': {'menu-custom': True, 'menu-icon': 'rise-orb', 'menu-icon-size': 30, 'menu-label': ''},
-    'grouped-window-list@cinnamon.org': {'pinned-apps': ['org.gnome.Epiphany.desktop', 'nemo.desktop', 'rise-assistant.desktop']},
+    'grouped-window-list@cinnamon.org': {'pinned-apps': ['org.gnome.Epiphany.desktop', 'nemo.desktop', 'rise-strumenti.desktop', 'rise-settings.desktop']},
 }
 for applet, keys in CHANGES.items():
     p = os.path.join(A, applet, 'settings-schema.json')

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Strumenti
+Comment=Recupero dati, salute e clonazione dischi, riparazione avvio, diagnosi: assistenza su macchine bloccate
+Exec=rise-shell --open strumenti
+Icon=rise-strumenti
+StartupWMClass=rise-strumenti
+Categories=System;
+Terminal=false
+Keywords=recupero;dati;disco;hard disk;clona;ddrescue;smart;avvio;boot;password;windows;diagnosi;bitlocker;testdisk;photorec;

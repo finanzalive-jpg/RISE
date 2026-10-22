@@ -1,0 +1,556 @@
+#!/usr/bin/env python3
+"""Rise – Strumenti del tecnico (gira come amministratore).
+
+Assistenza su macchine bloccate affidate dal cliente: leggere e recuperare dati, salute e
+clonazione dei dischi, riparare l'avvio, reset della password di un account Windows locale,
+BitLocker con la chiave di ripristino, diagnosi, cancellazione sicura.
+
+Lo chiama rise-shell con  sudo -n /usr/local/bin/rise-op <comando> [JSON su stdin].
+I comandi lunghi (clonazione, recupero, cancellazione, scansione) partono in sottofondo e
+scrivono lo stato in /tmp/rise-op/<lavoro>.json; l'interfaccia lo legge con "stato".
+
+Paletto non negoziabile: niente forzatura di cifrature o password senza la chiave. Le operazioni
+che distruggono dati (cancellazione, clonazione sopra un disco) rifiutano il disco di sistema
+e chiedono conferma esplicita dall'interfaccia.
+"""
+import json
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+
+JOBDIR = '/tmp/rise-op'
+MNT = '/mnt/rise-op'
+
+
+def sh(cmd, timeout=60, check=False):
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return 124, '', 'tempo scaduto'
+    except OSError as e:
+        return 127, '', str(e)
+    if check and r.returncode != 0:
+        raise RuntimeError((r.stderr or r.stdout).strip()[-300:])
+    return r.returncode, r.stdout, r.stderr
+
+
+def have(prog):
+    return shutil.which(prog) is not None
+
+
+# ---------------- dischi ----------------
+def _system_disks():
+    """Dischi da NON toccare: quello con il sistema in esecuzione e la chiavetta live."""
+    protect = set()
+    for mp in ('/', '/cdrom', '/run/live/medium', '/boot', '/boot/efi'):
+        rc, out, _ = sh(['findmnt', '-n', '-o', 'SOURCE', '--target', mp])
+        src = out.strip()
+        if not src:
+            continue
+        # risali dal device (sdb3) al disco (sdb)
+        rc2, out2, _ = sh(['lsblk', '-no', 'PKNAME', src])
+        parent = out2.strip().splitlines()
+        if parent and parent[0]:
+            protect.add('/dev/' + parent[0].strip())
+        else:
+            m = re.match(r'(/dev/[a-z]+|/dev/nvme\d+n\d+|/dev/mmcblk\d+)', src)
+            if m:
+                protect.add(m.group(1))
+    return protect
+
+
+def disks(_a):
+    rc, out, err = sh(['lsblk', '-J', '-b', '-o',
+                       'NAME,PATH,KNAME,TYPE,SIZE,FSTYPE,LABEL,MOUNTPOINT,MODEL,SERIAL,TRAN,RM,RO,PARTLABEL,PARTTYPENAME'])
+    if rc != 0:
+        return {'ok': False, 'message': 'Non riesco a leggere i dischi: %s' % (err or '')[-200:]}
+    try:
+        data = json.loads(out)
+    except ValueError:
+        return {'ok': False, 'message': 'Lettura dischi non valida'}
+    protect = _system_disks()
+    out_disks = []
+    for d in data.get('blockdevices', []):
+        if d.get('type') != 'disk':
+            continue
+        parts = []
+        for p in d.get('children', []) or []:
+            parts.append({'path': p.get('path'), 'name': p.get('name'), 'size': p.get('size') or 0,
+                          'fstype': p.get('fstype'), 'label': p.get('label') or p.get('partlabel'),
+                          'mount': p.get('mountpoint'), 'kind': p.get('parttypename'),
+                          'ro': bool(p.get('ro')),
+                          'windows': bool(p.get('fstype') == 'ntfs' or (p.get('parttypename') or '').lower().find('microsoft') >= 0)})
+        out_disks.append({'path': d.get('path'), 'name': d.get('name'), 'size': d.get('size') or 0,
+                          'model': (d.get('model') or '').strip(), 'serial': (d.get('serial') or '').strip(),
+                          'tran': d.get('tran'), 'removable': bool(d.get('rm')), 'ro': bool(d.get('ro')),
+                          'system': d.get('path') in protect,
+                          'hasWindows': any(p['windows'] for p in parts), 'partitions': parts})
+    return {'ok': True, 'disks': out_disks, 'tools': _tools()}
+
+
+def _tools():
+    return {k: have(v) for k, v in {
+        'smart': 'smartctl', 'ddrescue': 'ddrescue', 'photorec': 'photorec', 'testdisk': 'testdisk',
+        'ntfsfix': 'ntfsfix', 'chntpw': 'chntpw', 'dislocker': 'dislocker', 'nwipe': 'nwipe',
+        'clamscan': 'clamscan', 'osprober': 'os-prober', 'inxi': 'inxi', 'grub': 'update-grub'}.items()}
+
+
+def _dev_ok(dev):
+    return isinstance(dev, str) and re.match(r'^/dev/[a-zA-Z0-9/]+$', dev) and os.path.exists(dev)
+
+
+# ---------------- salute del disco (SMART) ----------------
+def smart(a):
+    dev = a.get('dev')
+    if not _dev_ok(dev):
+        return {'ok': False, 'message': 'Disco non valido.'}
+    if not have('smartctl'):
+        return {'ok': False, 'message': 'smartctl non installato.'}
+    rc, out, _ = sh(['smartctl', '-H', '-A', '-i', '-j', dev], timeout=40)
+    try:
+        j = json.loads(out)
+    except ValueError:
+        # alcuni dischi USB non parlano SMART
+        rc2, out2, _ = sh(['smartctl', '-H', dev], timeout=40)
+        passed = 'PASSED' in out2
+        return {'ok': True, 'smart': False, 'passed': passed, 'raw': out2.strip()[-400:]}
+    passed = j.get('smart_status', {}).get('passed')
+    attrs = []
+    key = {5: 'Settori riallocati', 187: 'Errori non correggibili', 197: 'Settori in attesa',
+           198: 'Settori illeggibili', 9: 'Ore di accensione', 194: 'Temperatura', 12: 'Accensioni'}
+    for at in (j.get('ata_smart_attributes', {}).get('table', []) or []):
+        if at.get('id') in key:
+            attrs.append({'name': key[at['id']], 'value': at.get('raw', {}).get('string') or at.get('value')})
+    temp = j.get('temperature', {}).get('current')
+    return {'ok': True, 'smart': True, 'passed': bool(passed),
+            'model': j.get('model_name'), 'serial': j.get('serial_number'),
+            'temp': temp, 'attrs': attrs,
+            'summary': 'Il disco supera il test di salute.' if passed else
+                       'ATTENZIONE: il disco segnala problemi. Clonalo subito e sostituiscilo.'}
+
+
+# ---------------- montare / smontare per copiare i dati ----------------
+def _slug(dev):
+    return re.sub(r'[^a-zA-Z0-9]', '_', dev.replace('/dev/', ''))
+
+
+def mount(a):
+    dev = a.get('dev')
+    rw = bool(a.get('rw'))
+    if not _dev_ok(dev):
+        return {'ok': False, 'message': 'Partizione non valida.'}
+    target = os.path.join(MNT, _slug(dev))
+    os.makedirs(target, exist_ok=True)
+    rc, out, _ = sh(['findmnt', '-n', '-o', 'TARGET,OPTIONS', '--source', dev])
+    if out.strip():
+        line = out.strip().splitlines()[0].split()
+        cur_mp = line[0]
+        is_ro = len(line) > 1 and line[1].startswith('ro')
+        if rw and is_ro:   # già montato in sola lettura ma serve scrivere: rimonto in lettura/scrittura
+            r2, o2, e2 = sh(['mount', '-o', 'remount,rw', cur_mp], timeout=40)
+            if r2 != 0:
+                return {'ok': False, 'message': 'Non riesco a sbloccare in scrittura: %s' % (e2 or o2).strip()[-200:]}
+        return {'ok': True, 'mountpoint': cur_mp, 'already': True, 'rw': rw}
+    rc, _, _ = sh(['lsblk', '-no', 'FSTYPE', dev])
+    fs = _.strip() if False else None
+    rc2, fsout, _ = sh(['lsblk', '-no', 'FSTYPE', dev])
+    fs = fsout.strip().splitlines()[0] if fsout.strip() else ''
+    opts = []
+    if fs == 'ntfs':
+        # Windows ibernato/spento male: monta in sola lettura senza toccare l'ibernazione,
+        # oppure, se chiedi scrittura, rimuove il file di ibernazione (il tecnico sa cosa fa).
+        if rw:
+            opts = ['-o', 'remove_hiberfile,rw']
+        else:
+            opts = ['-o', 'ro']
+        cmd = ['mount', '-t', 'ntfs-3g'] + opts + [dev, target]
+    else:
+        cmd = ['mount'] + (['-o', 'ro'] if not rw else []) + [dev, target]
+    rc, out, err = sh(cmd, timeout=60)
+    if rc != 0:
+        msg = (err or out).strip()[-300:]
+        if 'hiberfile' in msg or 'hibernated' in msg or 'unclean' in msg.lower():
+            msg += ' — il disco Windows è ibernato o spento male. Prova in sola lettura, o scegli “sblocca per scrittura”.'
+        return {'ok': False, 'message': msg}
+    return {'ok': True, 'mountpoint': target, 'fs': fs, 'rw': rw}
+
+
+def unmount(a):
+    dev = a.get('dev')
+    mp = a.get('mountpoint')
+    tgt = mp if mp else (os.path.join(MNT, _slug(dev)) if _dev_ok(dev) else None)
+    if not tgt:
+        return {'ok': False, 'message': 'Niente da smontare.'}
+    rc, out, err = sh(['umount', tgt], timeout=60)
+    if rc != 0:
+        sh(['umount', '-l', tgt], timeout=20)
+    return {'ok': True}
+
+
+# ---------------- lavori lunghi in sottofondo (stato su file) ----------------
+def _status_path(job):
+    os.makedirs(JOBDIR, exist_ok=True)
+    return os.path.join(JOBDIR, re.sub(r'[^a-z]', '', job) + '.json')
+
+
+def _set_status(job, **kw):
+    p = _status_path(job)
+    try:
+        st = json.load(open(p))
+    except (OSError, ValueError):
+        st = {}
+    st.update(kw, time=time.time())
+    tmp = p + '.tmp'
+    json.dump(st, open(tmp, 'w'), ensure_ascii=False)
+    os.replace(tmp, p)
+
+
+def job_status(a):
+    p = _status_path(a.get('job', ''))
+    try:
+        st = json.load(open(p))
+    except (OSError, ValueError):
+        st = {}
+    running = False
+    pid = st.get('pid')
+    if pid:
+        try:
+            os.kill(int(pid), 0)
+            running = True
+        except OSError:
+            running = False
+    st['running'] = running
+    return {'ok': True, 'status': st}
+
+
+def job_stop(a):
+    p = _status_path(a.get('job', ''))
+    try:
+        st = json.load(open(p))
+        os.killpg(int(st['pid']), signal.SIGTERM)
+    except (OSError, ValueError, KeyError):
+        pass
+    _set_status(a.get('job', ''), phase='stopped', message='Fermato.', done=True)
+    return {'ok': True}
+
+
+def _spawn(job, fn):
+    """Esegue fn() in un processo figlio; fn aggiorna lo stato via _set_status(job, ...)."""
+    _set_status(job, phase='start', message='Comincio…', pct=0, done=False, error=None)
+    pid = os.fork()
+    if pid == 0:
+        os.setsid()
+        try:
+            fn()
+        except Exception as e:
+            _set_status(job, phase='error', message=str(e), error=str(e), done=True)
+        os._exit(0)
+    _set_status(job, pid=pid)
+    return {'ok': True, 'job': job}
+
+
+# ---------------- clonazione di un disco che muore (ddrescue) ----------------
+def clone(a):
+    src, dst = a.get('src'), a.get('dst')
+    if not (_dev_ok(src) and _dev_ok(dst)):
+        return {'ok': False, 'message': 'Disco di origine o destinazione non valido.'}
+    if src == dst:
+        return {'ok': False, 'message': 'Origine e destinazione sono lo stesso disco.'}
+    prot = _system_disks()
+    if dst in prot:
+        return {'ok': False, 'message': 'La destinazione è il disco di sistema: scegli un altro disco.'}
+    if not a.get('confirm'):
+        return {'ok': False, 'needConfirm': True,
+                'message': 'La clonazione CANCELLA tutto sul disco di destinazione %s. Conferma per procedere.' % dst}
+    if not have('ddrescue'):
+        return {'ok': False, 'message': 'ddrescue non installato.'}
+    mapf = os.path.join(JOBDIR, 'clone.map')
+
+    def run():
+        _set_status('clone', phase='run', message='Copio %s → %s (salto i settori rotti)…' % (src, dst))
+        p = subprocess.Popen(['ddrescue', '-f', '-n', '-d', src, dst, mapf],
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        _set_status('clone', pid=p.pid)
+        for line in p.stdout:
+            m = re.search(r'rescued:\s*([\d.]+\s*\w+).*?\(\s*([\d.]+)%', line)
+            if not m:
+                m = re.search(r'pct rescued:\s*([\d.]+)%', line)
+            if m:
+                try:
+                    _set_status('clone', pct=float(m.group(2) if m.lastindex >= 2 else m.group(1)), message=line.strip()[:120])
+                except (ValueError, IndexError):
+                    pass
+        p.wait()
+        # seconda passata: ritenta i settori rotti
+        p2 = subprocess.Popen(['ddrescue', '-f', '-d', '-r3', src, dst, mapf],
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        _set_status('clone', pid=p2.pid, phase='retry', message='Ritento i settori danneggiati…')
+        for line in p2.stdout:
+            m = re.search(r'pct rescued:\s*([\d.]+)%', line)
+            if m:
+                _set_status('clone', pct=float(m.group(1)))
+        p2.wait()
+        _set_status('clone', phase='done', message='Clonazione finita. Ora lavora sul disco nuovo, non sull’originale.',
+                    pct=100, done=True)
+    return _spawn('clone', run)
+
+
+# ---------------- recupero file cancellati / partizioni (PhotoRec) ----------------
+def recover(a):
+    dev = a.get('dev')
+    out = a.get('out')
+    if not _dev_ok(dev):
+        return {'ok': False, 'message': 'Disco non valido.'}
+    if not out or not os.path.isdir(out):
+        return {'ok': False, 'message': 'Scegli una cartella di destinazione valida (su un ALTRO disco o chiavetta).'}
+    if not have('photorec'):
+        return {'ok': False, 'message': 'photorec non installato.'}
+    recup = os.path.join(out, 'rise-recupero')
+    os.makedirs(recup, exist_ok=True)
+
+    def run():
+        _set_status('recover', phase='run', message='Cerco e recupero i file in %s…' % recup)
+        # photorec in modalità non interattiva: tutti i tipi, su tutto il disco
+        p = subprocess.Popen(['photorec', '/d', recup + '/recup', '/cmd', dev, 'partition_none,fileopt,everything,enable,search'],
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        _set_status('recover', pid=p.pid)
+        n = 0
+        for line in p.stdout:
+            if 'recovered' in line.lower() or 'files' in line.lower():
+                n += 1
+                _set_status('recover', message=line.strip()[:120])
+        p.wait()
+        found = sum(len(fs) for _, _, fs in os.walk(recup))
+        _set_status('recover', phase='done', done=True, pct=100,
+                    message='Recupero finito: %d file in %s.' % (found, recup))
+    return _spawn('recover', run)
+
+
+# ---------------- avvio: dual boot (GRUB) e partizione Windows ----------------
+def bootinfo(a):
+    res = {'ok': True}
+    if have('os-prober'):
+        rc, out, _ = sh(['os-prober'], timeout=60)
+        res['systems'] = [l for l in out.splitlines() if l.strip()]
+    res['efi'] = os.path.isdir('/sys/firmware/efi')
+    return res
+
+
+def bootfix(a):
+    """Ricostruisce il menu di avvio (dual boot) e fa ritrovare Windows. Per l'avvio di Windows
+    rovinato, controlla il filesystem NTFS della partizione di sistema."""
+    steps = []
+    if have('update-grub'):
+        # fa cercare gli altri sistemi (Windows) e riscrive il menu
+        try:
+            with open('/etc/default/grub') as f:
+                g = f.read()
+            if 'GRUB_DISABLE_OS_PROBER=false' not in g:
+                with open('/etc/default/grub', 'a') as f:
+                    f.write('\nGRUB_DISABLE_OS_PROBER=false\n')
+        except OSError:
+            pass
+        rc, out, err = sh(['update-grub'], timeout=300)
+        steps.append('Menu di avvio ricostruito.' if rc == 0 else 'update-grub: %s' % (err or '')[-150:])
+    win = a.get('winpart')
+    if win and _dev_ok(win) and have('ntfsfix'):
+        rc, out, err = sh(['ntfsfix', '-d', win], timeout=120)
+        steps.append('Controllo partizione Windows: ' + ('a posto.' if rc == 0 else (err or out).strip()[-150:]))
+    return {'ok': True, 'steps': steps}
+
+
+# ---------------- password di un account Windows locale (chntpw) ----------------
+def _find_sam(dev):
+    m = mount({'dev': dev, 'rw': True})
+    if not m.get('ok'):
+        return None, m.get('message')
+    mp = m['mountpoint']
+    for cand in ('Windows/System32/config/SAM', 'WINDOWS/system32/config/SAM', 'windows/system32/config/SAM'):
+        p = os.path.join(mp, cand)
+        if os.path.exists(p):
+            return p, None
+    return None, 'Non è una partizione di sistema Windows (SAM non trovato).'
+
+
+def win_users(a):
+    if not have('chntpw'):
+        return {'ok': False, 'message': 'chntpw non installato.'}
+    sam, err = _find_sam(a.get('dev'))
+    if not sam:
+        return {'ok': False, 'message': err}
+    rc, out, _ = sh(['chntpw', '-l', sam], timeout=40)
+    users = []
+    for line in out.splitlines():
+        m = re.match(r'\|\s*([0-9a-fx]+)\s*\|\s*(.+?)\s*\|\s*(ADMIN|.*?)\s*\|', line)
+        if m and m.group(2) not in ('Username', ''):
+            users.append({'name': m.group(2).strip(), 'admin': 'ADMIN' in line})
+    return {'ok': True, 'users': users, 'sam': sam}
+
+
+def win_clear(a):
+    """Azzera la password di un account Windows locale (l'utente poi entra senza password e ne mette una nuova)."""
+    if not have('chntpw'):
+        return {'ok': False, 'message': 'chntpw non installato.'}
+    sam, err = _find_sam(a.get('dev'))
+    if not sam:
+        return {'ok': False, 'message': err}
+    user = a.get('user')
+    if not user:
+        return {'ok': False, 'message': 'Scegli l’utente.'}
+    # chntpw interattivo: scegli utente, "1" = azzera password, "q", "y" per salvare
+    script = '%s\n1\nq\ny\n' % user
+    try:
+        p = subprocess.run(['chntpw', '-u', user, sam], input=script, capture_output=True, text=True, timeout=60)
+    except Exception as e:
+        return {'ok': False, 'message': str(e)}
+    ok = 'Hive' in p.stdout or 'written back' in (p.stdout + p.stderr).lower() or p.returncode == 0
+    unmount({'dev': a.get('dev')})
+    return {'ok': ok, 'message': 'Password azzerata per %s. Al prossimo avvio Windows entra senza password: fagliene mettere una nuova.' % user
+            if ok else 'Non riuscito: %s' % (p.stderr or p.stdout).strip()[-200:]}
+
+
+# ---------------- BitLocker con la chiave di ripristino ----------------
+def bitlocker(a):
+    dev = a.get('dev')
+    key = (a.get('key') or '').strip()
+    if not _dev_ok(dev):
+        return {'ok': False, 'message': 'Partizione non valida.'}
+    if not key:
+        return {'ok': False, 'message': 'Serve la chiave di ripristino BitLocker (48 cifre) o la password del disco.'}
+    if not have('dislocker'):
+        return {'ok': False, 'message': 'dislocker non installato.'}
+    hole = os.path.join(MNT, _slug(dev) + '-bl')
+    os.makedirs(hole, exist_ok=True)
+    # chiave di ripristino (48 cifre) con -p, password normale con -u
+    flag = '-p' + key.replace('-', '') if re.fullmatch(r'[\d-]{48,55}', key) else '-u' + key
+    rc, out, err = sh(['dislocker', '-V', dev, flag, '--', hole], timeout=90)
+    if rc != 0:
+        return {'ok': False, 'message': 'Chiave non valida o disco non BitLocker: %s' % (err or out).strip()[-200:]}
+    clear = os.path.join(hole, 'dislocker-file')
+    tgt = os.path.join(MNT, _slug(dev) + '-aperto')
+    os.makedirs(tgt, exist_ok=True)
+    rc2, out2, err2 = sh(['mount', '-o', 'ro,loop', clear, tgt], timeout=60)
+    if rc2 != 0:
+        return {'ok': False, 'message': 'Sbloccato ma non montato: %s' % (err2 or '')[-150:]}
+    return {'ok': True, 'mountpoint': tgt, 'message': 'Disco BitLocker sbloccato: copia pure i dati.'}
+
+
+# ---------------- diagnosi e report hardware ----------------
+def report(a):
+    out = a.get('out')
+    lines = ['Rapporto hardware Rise — %s' % time.strftime('%d/%m/%Y %H:%M'), '=' * 48, '']
+    for title, cmd in [('Sistema', ['inxi', '-F', '-c0']), ('Sistema', ['dmidecode', '-t', 'system']),
+                       ('Dischi', ['lsblk', '-o', 'NAME,SIZE,MODEL,SERIAL,TRAN']), ('Memoria', ['free', '-h'])]:
+        if have(cmd[0]):
+            rc, o, _ = sh(cmd, timeout=40)
+            lines += ['## ' + title, o.strip(), '']
+    for dev in (a.get('disks') or []):
+        if _dev_ok(dev) and have('smartctl'):
+            rc, o, _ = sh(['smartctl', '-H', dev], timeout=30)
+            lines += ['## SMART %s' % dev, o.strip(), '']
+    text = '\n'.join(lines)
+    saved = None
+    if out and os.path.isdir(out):
+        saved = os.path.join(out, 'rapporto-hardware-%s.txt' % time.strftime('%Y%m%d-%H%M'))
+        try:
+            open(saved, 'w').write(text)
+        except OSError:
+            saved = None
+    return {'ok': True, 'text': text, 'saved': saved}
+
+
+# ---------------- scansione antivirus (disco Windows da fuori) ----------------
+def scan(a):
+    mp = a.get('mountpoint')
+    if not mp or not os.path.isdir(mp):
+        return {'ok': False, 'message': 'Monta prima il disco da controllare.'}
+    if not have('clamscan'):
+        return {'ok': False, 'message': 'clamav non installato.'}
+
+    def run():
+        _set_status('scan', phase='run', message='Controllo %s (può volerci parecchio)…' % mp)
+        inf = os.path.join(JOBDIR, 'infetti.txt')
+        p = subprocess.Popen(['clamscan', '-r', '-i', '--stdout', '-l', inf, mp],
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        _set_status('scan', pid=p.pid)
+        found = 0
+        for line in p.stdout:
+            if line.rstrip().endswith('FOUND'):
+                found += 1
+                _set_status('scan', found=found, message=line.strip()[:140])
+        p.wait()
+        _set_status('scan', phase='done', done=True, found=found,
+                    message=('Trovati %d file infetti (elenco in %s).' % (found, inf)) if found else 'Nessun virus trovato.')
+    return _spawn('scan', run)
+
+
+# ---------------- cancellazione sicura (prima di rivendere) ----------------
+def wipe(a):
+    dev = a.get('dev')
+    if not _dev_ok(dev):
+        return {'ok': False, 'message': 'Disco non valido.'}
+    if dev in _system_disks():
+        return {'ok': False, 'message': 'È il disco di sistema: non lo posso cancellare.'}
+    if a.get('confirm') != dev:
+        return {'ok': False, 'needConfirm': True,
+                'message': 'Cancellazione DEFINITIVA di %s: tutti i dati saranno persi per sempre. Per confermare reinserisci il nome del disco.' % dev}
+
+    def run():
+        _set_status('wipe', phase='run', message='Cancello %s…' % dev)
+        # SSD: cancellazione istantanea del firmware se possibile; altrimenti sovrascrittura
+        rc, out, _ = sh(['lsblk', '-no', 'ROTA', dev])
+        ssd = out.strip().splitlines()[0] == '0' if out.strip() else False
+        if ssd and have('blkdiscard'):
+            rc, o, e = sh(['blkdiscard', '-f', dev], timeout=600)
+            if rc == 0:
+                _set_status('wipe', phase='done', done=True, pct=100, message='Disco SSD cancellato.')
+                return
+        if have('nwipe'):
+            p = subprocess.Popen(['nwipe', '--autonuke', '--method=zero', '--nowait', dev],
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            _set_status('wipe', pid=p.pid)
+            for line in p.stdout:
+                m = re.search(r'([\d.]+)%', line)
+                if m:
+                    _set_status('wipe', pct=float(m.group(1)))
+            p.wait()
+        else:
+            # ripiego: azzera con dd
+            sh(['dd', 'if=/dev/zero', 'of=' + dev, 'bs=1M', 'status=none'], timeout=36000)
+        _set_status('wipe', phase='done', done=True, pct=100, message='Cancellazione finita.')
+    return _spawn('wipe', run)
+
+
+CMDS = {'disks': disks, 'smart': smart, 'mount': mount, 'unmount': unmount,
+        'clone': clone, 'recover': recover, 'bootinfo': bootinfo, 'bootfix': bootfix,
+        'winUsers': win_users, 'winClear': win_clear, 'bitlocker': bitlocker,
+        'report': report, 'scan': scan, 'wipe': wipe, 'status': job_status, 'stop': job_stop}
+
+
+def main():
+    if os.geteuid() != 0:
+        print(json.dumps({'ok': False, 'message': 'serve amministratore'}))
+        return 1
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ''
+    fn = CMDS.get(cmd)
+    if not fn:
+        print(json.dumps({'ok': False, 'message': 'comando sconosciuto'}))
+        return 2
+    try:
+        raw = sys.stdin.read()
+        a = json.loads(raw) if raw.strip() else {}
+    except ValueError:
+        a = {}
+    try:
+        print(json.dumps(fn(a), ensure_ascii=False))
+    except Exception as e:
+        print(json.dumps({'ok': False, 'message': str(e)}, ensure_ascii=False))
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

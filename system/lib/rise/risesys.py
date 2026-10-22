@@ -1113,13 +1113,8 @@ CMDS = {'sys.bootwhy': sys_bootwhy, 'doc.create': doc_create, 'doc.preventivo': 
 
 
 
-# Assistente (intelligenza artificiale sul computer)
-try:
-    import riseai
-    CMDS.update(riseai.CMDS)
-except Exception:  # senza il modulo l'Assistente risulta semplicemente non disponibile
-    pass
-for _m in ('risevoice', 'riseweb', 'riseapps', 'riseauto', 'riseremind', 'riseupdate', 'riseinstall', 'risenet', 'riseprint', 'risebt'):
+# Moduli con i comandi aggiuntivi (rete, stampanti, Bluetooth, aggiornamenti, installazione, strumenti tecnico)
+for _m in ('riseweb', 'riseapps', 'riseauto', 'riseremind', 'riseupdate', 'riseinstall', 'risenet', 'riseprint', 'risebt', 'riseop'):
     try:
         CMDS.update(__import__(_m).CMDS)
     except Exception:

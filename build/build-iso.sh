@@ -123,66 +123,7 @@ for app in wordcraft gridcraft deckcraft; do
 done
 rm -rf "$CH/tmp/craft"
 
-log "3c/9 Motore dell'Assistente (llama.cpp)"
-# Dal pacchetto Ubuntu arriva llama-server; dalla versione ufficiale si prendono gli strumenti che mancano
-# (llama-gguf-split serve a dividere i modelli oltre 4 GB per le chiavette FAT32).
-if ! chroot "$CH" sh -c 'command -v llama-server && command -v llama-gguf-split' >/dev/null 2>&1; then
-  url="$(curl -fsSL ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} https://api.github.com/repos/ggml-org/llama.cpp/releases/latest 2>/dev/null \
-    | python3 -c 'import json,sys,re; d=json.load(sys.stdin); print(next((a["browser_download_url"] for a in d.get("assets",[]) if re.search(r"bin-ubuntu-x64\.(zip|tar\.gz)$", a["name"])), ""))' 2>/dev/null || true)"
-  if [ -n "$url" ]; then
-    mkdir -p "$CH/opt/llama" /tmp/llama-dl && curl -fsSL -o /tmp/llama-dl/pkg "$url"
-    case "$url" in *.zip) (cd /tmp/llama-dl && python3 -c 'import zipfile;zipfile.ZipFile("pkg").extractall("x")');; *) mkdir -p /tmp/llama-dl/x && tar xzf /tmp/llama-dl/pkg -C /tmp/llama-dl/x;; esac
-    d="$(dirname "$(find /tmp/llama-dl/x -name llama-server -type f | head -1)")"
-    if [ -n "$d" ] && [ -d "$d" ]; then
-      cp -a "$d"/. "$CH/opt/llama/"
-      for t in llama-server llama-gguf-split; do
-        if ! chroot "$CH" sh -c "command -v $t" >/dev/null 2>&1 && [ -x "$CH/opt/llama/$t" ]; then
-          printf '#!/bin/sh\nexport LD_LIBRARY_PATH=/opt/llama${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\nexec /opt/llama/%s "$@"\n' "$t" > "$CH/usr/local/bin/$t"
-          chmod +x "$CH/usr/local/bin/$t"
-        fi
-      done
-      echo "llama.cpp ufficiale da $url"
-    fi
-    rm -rf /tmp/llama-dl
-  fi
-fi
-for t in llama-server llama-gguf-split whisper-cli; do echo "$t: $(chroot "$CH" sh -c "command -v $t" || echo 'MANCANTE')"; done
-
-log "3d/9 Voce dell'Assistente (Kokoro: voci italiane naturali; Piper di riserva)"
-if chroot "$CH" python3 -m venv /opt/kokoro && chroot "$CH" /opt/kokoro/bin/pip install -q --no-cache-dir kokoro-onnx; then
-  chroot "$CH" /opt/kokoro/bin/python -c 'import kokoro_onnx, onnxruntime; print("kokoro ok, onnxruntime", onnxruntime.__version__)' || echo "ATTENZIONE: Kokoro non funziona"
-  find "$CH/opt/kokoro" -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
-else
-  echo "ATTENZIONE: Kokoro non installato, la voce userà Piper"; rm -rf "$CH/opt/kokoro"
-fi
-# PDF dell'Assistente (preventivi e documenti in PDF): fpdf2, licenza LGPL
-if chroot "$CH" python3 -m venv /opt/rise-py && chroot "$CH" /opt/rise-py/bin/pip install -q --no-cache-dir fpdf2; then
-  echo "fpdf2: ok"; find "$CH/opt/rise-py" -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
-else
-  echo "ATTENZIONE: fpdf2 non installato, niente PDF dall'Assistente"
-fi
-# "Ehi Sara": vosk (Apache 2.0) e il piccolo modello italiano (circa 50 MB), tutto offline
-if chroot "$CH" /opt/rise-py/bin/pip install -q --no-cache-dir setuptools wheel && chroot "$CH" /opt/rise-py/bin/pip install -q --no-cache-dir vosk \
-   && chroot "$CH" /opt/rise-py/bin/python -c 'from vosk import Model, KaldiRecognizer; print("vosk: ok")'; then
-  mkdir -p /tmp/vosk-dl
-  for VURL in "https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip"; do
-    if curl -fsSL --retry 3 -o /tmp/vosk-dl/m.zip "$VURL" && (cd /tmp/vosk-dl && python3 -m zipfile -e m.zip .); then
-      rm -rf "$CH/opt/vosk-it"; mv /tmp/vosk-dl/vosk-model-small-it-0.22 "$CH/opt/vosk-it"; echo "modello vosk: ok ($VURL)"; break
-    fi
-  done
-  [ -d "$CH/opt/vosk-it/am" ] || echo "ATTENZIONE: modello vosk non scaricato, niente \"Ehi Sara\""
-  rm -rf /tmp/vosk-dl; find "$CH/opt/rise-py" -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
-else
-  echo "ATTENZIONE: vosk non installato, niente \"Ehi Sara\""
-fi
-PURL="https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz"
-mkdir -p /tmp/piper-dl
-if curl -fsSL -o /tmp/piper-dl/p.tgz "$PURL" && tar xzf /tmp/piper-dl/p.tgz -C /tmp/piper-dl; then
-  rm -rf "$CH/opt/piper"; cp -a /tmp/piper-dl/piper "$CH/opt/piper"; echo "piper: ok"
-else
-  echo "ATTENZIONE: Piper non disponibile"
-fi
-rm -rf /tmp/piper-dl
+log "3c/9 (saltato) Rise leggero: nessun modello IA, nessuna voce da scaricare"
 
 log "4/9 Desktop di Rise (offline: caratteri e lettori di file inclusi)"
 D="$CH/opt/rise"; mkdir -p "$D/fonts" "$D/lib"
