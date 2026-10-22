@@ -111,17 +111,7 @@ class Rise(Gtk.Application):
         if not self.started:
             self.started = True
             self.boot()
-        if '--wake' in args:
-            # scorciatoia da tastiera per chiamare l'Assistente (come dire "Ehi Sara")
-            i = args.index('--wake')
-            self.wake_fire(args[i + 1] if i + 1 < len(args) and args[i + 1] in ('f', 'm') else None)
-        elif '--test-lip' in args:
-            # prova della bocca della figura: 3 secondi di "parlato" finto
-            import math
-            import risevoice
-            env = [abs(math.sin(i / 3.0)) * (0.6 + 0.4 * math.sin(i / 11.0)) for i in range(150)]
-            risevoice._lip.update(env=env, step=0.02, t0=time.time() + 0.2, seq=risevoice._lip.get('seq', 0) + 1)
-        elif '--start' in args:
+        if '--start' in args:
             self.popup_toggle('start')
         elif '--open' in args:
             i = args.index('--open')
@@ -212,43 +202,17 @@ class Rise(Gtk.Application):
             self.drop = None
         # indice per la ricerca dei file, aggiornato con calma dopo l'avvio
         GLib.timeout_add_seconds(90, self.index_later)
-        # promemoria e timer dell'Assistente: suonano anche con l'Assistente chiuso
+        # promemoria e timer: suonano anche a finestra chiusa
         try:
             import riseremind
             riseremind.start(lambda r: GLib.idle_add(self.reminder_fire, r))
         except Exception as e:
             print('promemoria non attivi:', e, file=sys.stderr)
-        # "Ehi Sara" / "Ehi Nicola": l'Assistente si sveglia senza toccare niente
-        try:
-            import risevoice
-            risevoice.wake_start(lambda who: GLib.idle_add(self.wake_fire, who))
-        except Exception as e:
-            print('attivazione a voce non attiva:', e, file=sys.stderr)
 
     # ---------------- desktop Cinnamon (X11) ----------------
     def boot_x11(self):
         import risex11
         self.rx = risex11
-        fw, fh = 270, 300
-        f = Gtk.Window(application=self)
-        f.set_decorated(False)
-        f.set_resizable(False)
-        f.set_default_size(fw, fh)
-        f.set_title('Rise')
-        self.make_window('figure', url_for(role='figure'), f)
-
-        def realized(*_):
-            risex11.prepare(risex11.xid_of(f), wm_class=('rise-figure', 'Rise'), kind=None,
-                            states=('below', 'skip_taskbar', 'skip_pager'), sticky=True)
-
-        def mapped(*_):
-            xid = risex11.xid_of(f)
-            x, y, w, h = risex11.workarea()
-            risex11.move(xid, x + w - fw - 6, y + 6)
-            risex11.set_states(xid, ('below', 'skip_taskbar', 'skip_pager', 'sticky'))
-        f.connect('realize', realized)
-        f.connect('map', mapped)
-        f.present()
         self.make_popup_x11()
 
     def make_popup_x11(self):
@@ -280,15 +244,9 @@ class Rise(Gtk.Application):
         w.connect('realize', realized)
         w.connect('map', mapped)
 
-    def figure_visible(self, a, _name=None):
-        f = self.windows.get('figure')
-        if f is not None:
-            f.set_visible(bool(a.get('on', True)))
-        return {'ok': True}
-
     def notify(self, a, _name=None):
         try:
-            subprocess.Popen(['notify-send', '-a', 'Rise', '-i', a.get('icon') or 'rise-assistant', a.get('title') or 'Rise',
+            subprocess.Popen(['notify-send', '-a', 'Rise', '-i', a.get('icon') or 'rise-settings', a.get('title') or 'Rise',
                               str(a.get('text', ''))[:400]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except OSError:
             pass
@@ -355,9 +313,6 @@ class Rise(Gtk.Application):
         threading.Thread(target=self.run_cmd, args=(name, msg), daemon=True).start()
 
     def run_cmd(self, name, msg):
-        if msg.get('cmd') in ('voice.say', 'voice.listen'):
-            fig = 'figure' if 'figure' in self.views else 'desktop'
-            GLib.idle_add(self.js, fig, 'window.__riseFast && window.__riseFast()')
         fn = risesys.CMDS.get(msg.get('cmd'))
         try:
             res = {'data': fn(msg.get('args') or {})} if fn else {'error': 'comando sconosciuto'}
@@ -437,9 +392,6 @@ class Rise(Gtk.Application):
         def gone(*_):
             self.windows.pop(key, None)
             self.views.pop(key, None)
-            if aid == 'assistant':   # chiusa l'Assistente: si libera subito la memoria del modello
-                for c in ('ai.stop', 'voice.shutdown', 'voice.listenCancel'):
-                    threading.Thread(target=risesys.CMDS.get(c, lambda _: None), args=({},), daemon=True).start()
             return False
         w.connect('close-request', gone)
         try:
@@ -527,29 +479,8 @@ class Rise(Gtk.Application):
         self.js('panel', 'window.__risePopupState && window.__risePopupState(%s)' % json.dumps(self.popup_kind))
         return {'ok': True}
 
-    def wake_fire(self, who=None):
-        if who not in ('f', 'm'):
-            try:
-                import json as _j
-                who = (_j.load(open(os.path.expanduser('~/.config/rise/attivazione.json'))).get('voce') or 'f')
-            except Exception:
-                who = 'f'
-        # la figura sul desktop si gira ad ascoltare, l'Assistente si apre già in ascolto
-        self.broadcast('window.__riseWake && window.__riseWake(%s)' % json.dumps(who))
-        goto = {'wake': who, 't': time.time()}
-        if self.multi or 'app:assistant' in self.windows:
-            self.app_open({'id': 'assistant', 'title': 'Assistente', 'w': 774, 'h': 588, 'goto': goto})
-        else:
-            self.broadcast("window.openApp && window.openApp('assistant', {goto: %s})" % json.dumps(goto))
-        return False
-
     def reminder_fire(self, r):
         self.popup_show({'kind': 'remind', 'data': r})
-        try:
-            import risevoice
-            risevoice.say({'voice': risevoice._lip.get('voice') or 'f', 'text': ('È scaduto il timer. ' if r.get('timer') else 'Promemoria: ') + r.get('text', '')})
-        except Exception:
-            pass
         return False
 
     def popup_hide(self, _a=None, _name=None):
@@ -765,7 +696,7 @@ UI_CMDS = {
     'win.state': Rise.win_state, 'win.fit': Rise.win_fit, 'popup.show': Rise.popup_show, 'popup.hide': Rise.popup_hide,
     'native.list': Rise.native_list, 'native.open': Rise.native_open, 'top.action': Rise.top_action,
     'state.changed': Rise.state_changed, 'shell.info': Rise.info, 'drop': Rise.drop_cmd,
-    'open.with': Rise.open_with, 'figure.visible': Rise.figure_visible, 'notify': Rise.notify, 'cinnamon.settings': Rise.cinnamon_settings,
+    'open.with': Rise.open_with, 'notify': Rise.notify, 'cinnamon.settings': Rise.cinnamon_settings,
 }
 
 if __name__ == '__main__':

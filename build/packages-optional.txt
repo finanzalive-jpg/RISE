@@ -11,3 +11,5 @@ bluez-obexd
 intel-media-va-driver gstreamer1.0-plugins-bad
 # Bluetooth: icona nella barra per accendere e associare
 blueman
+# Test della memoria RAM: aggiunge una voce nel menu di avvio
+memtest86+

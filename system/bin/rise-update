@@ -215,6 +215,39 @@ def _boot_options():
         _status(boot='errore: %s' % e)
 
 
+# pacchetti e file dell'Assistente (motore IA, voce, modelli): tolti da Rise, qui si liberano i GB.
+ASSISTANT_PKGS = ('llama.cpp-tools', 'libggml0-backend-vulkan', 'whisper.cpp')
+ASSISTANT_DIRS = ('/opt/llama', '/opt/piper', '/opt/kokoro', '/opt/vosk-it', '/opt/rise-py')
+
+
+def _cleanup_assistant():
+    """Una volta sola, su un computer installato: rimuove motore IA, voce e modelli dell'Assistente."""
+    stamp = '/var/lib/rise/assistant-removed'
+    if os.path.exists(stamp) or os.path.isdir('/cdrom/casper'):
+        return
+    try:
+        _status(phase='install', message='Libero lo spazio dell’Assistente…', pct=100)
+        r = subprocess.run(['dpkg-query', '-W', '-f', '${Package} ${db:Status-Status}\n'] + list(ASSISTANT_PKGS),
+                           capture_output=True, text=True)
+        inst = [l.split()[0] for l in r.stdout.splitlines() if l.endswith(' installed')]
+        if inst:
+            subprocess.run(['apt-get', 'purge', '-y', '-qq'] + inst,
+                           env=dict(os.environ, DEBIAN_FRONTEND='noninteractive'), timeout=600, capture_output=True)
+            subprocess.run(['apt-get', 'autoremove', '-y', '-qq'],
+                           env=dict(os.environ, DEBIAN_FRONTEND='noninteractive'), timeout=600, capture_output=True)
+        for d in ASSISTANT_DIRS:
+            shutil.rmtree(d, ignore_errors=True)
+        # modelli e voce scaricati dagli utenti (spesso diversi GB)
+        homes = ['/root'] + ['/home/' + u for u in os.listdir('/home')] if os.path.isdir('/home') else ['/root']
+        for h in homes:
+            shutil.rmtree(os.path.join(h, '.local/share/rise/models'), ignore_errors=True)
+            shutil.rmtree(os.path.join(h, '.local/share/rise/voce'), ignore_errors=True)
+        os.makedirs('/var/lib/rise', exist_ok=True)
+        open(stamp, 'w').write('')
+    except Exception:
+        pass
+
+
 def apply():
     if os.geteuid() != 0:
         print('serve root', file=sys.stderr)
@@ -290,6 +323,7 @@ def apply():
         if TARGET == '/':
             subprocess.run(['systemctl', 'daemon-reload'], capture_output=True)
             _boot_options()
+            _cleanup_assistant()
             # desktop Cinnamon: tema, pulsante Start, impostazioni predefinite, icone del menu
             if os.path.exists('/usr/local/bin/rise-cinnamon-setup'):
                 _status(phase='install', message='Preparo il desktop…', pct=100)
